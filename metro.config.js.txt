@@ -1,0 +1,11 @@
+// metro.config.js
+module.exports = {
+  resolver: {
+    sourceExts: ['js', 'json', 'ts', 'tsx', 'jsx'],
+  },
+  projectRoot: __dirname,
+  watchFolders: [__dirname],
+  transformer: {
+    babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  },
+};

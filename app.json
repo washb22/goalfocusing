@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "GoalFocusingApp",
+    "slug": "GoalFocusingApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e293b"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e293b"
+      },
+      "package": "com.wkrgud.GoalFocusingApp",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "SCHEDULE_EXACT_ALARM"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "78ae5a08-c3e1-4b58-af70-2355382a9732"
+      }
+    },
+    "owner": "wkrgud",
+    "androidNavigationBar": {
+      "visible": "sticky-immersive"
+    },
+    "androidStatusBar": {
+      "translucent": true
+    }
+  }
+}
