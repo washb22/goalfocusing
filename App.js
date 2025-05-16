@@ -25,6 +25,7 @@ import { LogBox } from 'react-native';
 import StatisticsScreen from './StatisticsScreen';
 import { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { Alert } from 'react-native';
+import { Platform } from 'react-native';  // ← 이거 꼭 필요!
 import dayjs from 'dayjs';
 LogBox.ignoreAllLogs(false);
 console.log('🟢 App.js 진입됨');
@@ -308,11 +309,20 @@ useEffect(() => {
   //통계탭 진입시 하루한번 전면광고
 const interstitialAdUnitId = __DEV__
   ? TestIds.INTERSTITIAL
+  : Platform.OS === 'ios'
+  ? 'ca-app-pub-3077862428685229/8018462916'
   : 'ca-app-pub-3077862428685229/9380705536'; // 작형님 전면 광고 ID
 
 const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
   requestNonPersonalizedAdsOnly: true,
 });
+
+// 목표화면 배너광고
+const bannerAdUnitId = __DEV__
+  ? TestIds.BANNER
+  : Platform.OS === 'ios'
+    ? 'ca-app-pub-3077862428685229/8453269694'  // iOS 배너
+    : 'ca-app-pub-3077862428685229/2520091207'; // Android 배너
 
 
 
@@ -1117,7 +1127,7 @@ return (
           {/* ✅ 여기에 광고 삽입! */}
              <View style={{ alignItems: 'center', marginBottom: 8 }}>
                <BannerAd
-                 unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-3077862428685229/2520091207'}
+                 unitId={bannerAdUnitId}
                  size={BannerAdSize.ADAPTIVE_BANNER}
                  requestOptions={{ requestNonPersonalizedAdsOnly: true }}
                  onAdFailedToLoad={(err) => console.log('배너 광고 로드 실패:', err)}

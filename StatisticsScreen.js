@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextI
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import dayjs from 'dayjs';
+import { Platform } from 'react-native';
+
 // Google Mobile Ads 추가
 import { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
@@ -46,8 +48,12 @@ export default function StatisticsScreen() {
   const [newTargetDate, setNewTargetDate] = useState('');
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
 
-  // 광고 ID (개발용 테스트 ID)
-  const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-3077862428685229/9380705536';
+  // 광고 ID (ios, android 배너광고 id)
+  const adUnitId = __DEV__
+    ? TestIds.BANNER
+    : Platform.OS === 'ios'
+      ? 'ca-app-pub-3077862428685229/8453269694'  // ✅ iOS 배너 광고
+      : 'ca-app-pub-3077862428685229/2520091207'; // ✅ Android 배너 광고
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
   const formatDate = (date) => date.toISOString().split('T')[0];
