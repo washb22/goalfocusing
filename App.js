@@ -22,16 +22,29 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { BackHandler } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { LogBox } from 'react-native';
+import StatisticsScreen from './StatisticsScreen';
+import { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { Alert } from 'react-native';
+import dayjs from 'dayjs';
 LogBox.ignoreAllLogs(false);
 console.log('🟢 App.js 진입됨');
+
+
+// ✅ 포그라운드 푸시 알림 핸들러 설정
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 
 // 목표 상태 상수 정의
 const GOAL_STATUS = {
   PENDING: 'pending',       // 미완료
   COMPLETED: 'completed',   // 완료됨
   FAILED: 'failed',         // 실패
-  CONSTRAINED: 'constrained', // 제약중
-  CONSTRAINT_COMPLETED: 'constraint_completed' // 제약완료
 };
 
 // 목표 데이터를 저장하는 함수
@@ -73,29 +86,44 @@ const checkStoredGoals = async () => {
 };
 
 export default function App() {
+const goToStatisticsScreen = () => {
+  setCurrentScreen(4); // ✅ 정상 작동
+};
 
-// 📢 알림 초기 설정 (권한 요청 + Android 채널 생성)
+
+/// 🔊 알림 초기 설정 (권한 요청 + Android 채널 생성)
  useEffect(() => {
-    const setupNotifications = async () => {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        alert('알림 권한이 거부되었습니다.');
-        return;
-      }
+   async function setupNotifications() {
+     const { status } = await Notifications.requestPermissionsAsync();
+     if (status !== 'granted') {
+       alert('알림 권한이 거부되었습니다.');
+       return;
+     }
 
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('goal-timer-channel', {
-          name: 'Goal Timer Notifications',
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: 'default',
-          vibrationPattern: [0, 300, 200, 300],
-          lightColor: '#FF231F7C',
-        });
-      }
-    };
+     // Android에서는 알림 채널 설정이 필요
+     if (Platform.OS === 'android') {
+       await Notifications.setNotificationChannelAsync('goal-timer-channel', {
+         name: '목표 타이머 알림',
+         importance: Notifications.AndroidImportance.HIGH,
+         vibrationPattern: [0, 250, 250, 250],
+         lightColor: '#8b5cf6', // 보라색
+         sound: true,
+       });
+     }
 
-    setupNotifications();
-  }, []);
+     // 알림 핸들러 설정 - 앱이 포그라운드 상태일 때도 알림을 표시하기 위함
+     Notifications.setNotificationHandler({
+       handleNotification: async () => ({
+         shouldShowAlert: true,
+         shouldPlaySound: true,
+         shouldSetBadge: false,
+       }),
+     });
+   }
+
+   setupNotifications();
+ }, []);
+
 
 
 
@@ -125,6 +153,7 @@ export default function App() {
   const [showPenaltyInputModal, setShowPenaltyInputModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [currentGoalId, setCurrentGoalId] = useState(null);
+  const [showConstraintOptions, setShowConstraintOptions] = useState(false);
 
   // 목표 수정 관련 상태
   const [editGoalModal, setEditGoalModal] = useState(false);
@@ -222,23 +251,36 @@ useEffect(() => {
 }, [currentScreen]); // currentScreen 변경 시 이벤트 리스너 업데이트
 
 
-  // 시간 선택기 초기화
-  useEffect(() => {
+//시간 선택기 초기화 (현재 시각 기준)
+useEffect(() => {
+  if (showTimeModal) {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const hour12 = currentHour % 12 === 0 ? 12 : currentHour % 12;
+    const ampm = currentHour < 12 ? 'AM' : 'PM';
+
+    setSelectedHour(hour12);
+    setSelectedMinute(currentMinute);
+    setSelectedPeriod(ampm);
+
     setTimeout(() => {
       if (hourScrollViewRef.current) {
         hourScrollViewRef.current.scrollTo({
-          y: (selectedHour - 1) * 40,
-          animated: false
+          y: (hour12 - 1) * 40,
+          animated: false,
         });
       }
       if (minuteScrollViewRef.current) {
         minuteScrollViewRef.current.scrollTo({
-          y: selectedMinute * 40,
-          animated: false
+          y: currentMinute * 40,
+          animated: false,
         });
       }
     }, 100);
-  }, [showTimeModal]);
+  }
+}, [showTimeModal]);
 
   // 목표 상태 변경 로깅
   useEffect(() => {
@@ -263,6 +305,65 @@ useEffect(() => {
     loadSavedGoals();
   }, []);
 
+  //통계탭 진입시 하루한번 전면광고
+const interstitialAdUnitId = __DEV__
+  ? TestIds.INTERSTITIAL
+  : 'ca-app-pub-3077862428685229/9380705536'; // 작형님 전면 광고 ID
+
+const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
+  requestNonPersonalizedAdsOnly: true,
+});
+
+
+
+// 전면광고 + 하루 1회 제한 + 통계탭 진입 함수
+  const handleStatisticsAccess = async () => {
+  const today = dayjs().format('YYYY-MM-DD');
+  const lastShown = await AsyncStorage.getItem('lastAdDate');
+
+  if (lastShown === today) {
+    goToStatisticsScreen();
+    return;
+  }
+
+  Alert.alert(
+    "광고 안내",
+    "이 기능은 하루 한 번 광고 시청 후 사용가능합니다.",
+    [
+      {
+        text: "확인",
+        onPress: () => {
+          const unsubscribeClose = interstitial.addAdEventListener(
+            AdEventType.CLOSED,
+            async () => {
+              await AsyncStorage.setItem('lastAdDate', today);
+              goToStatisticsScreen();
+              unsubscribeClose();
+            }
+          );
+
+          const unsubscribeError = interstitial.addAdEventListener(
+            AdEventType.ERROR,
+            (err) => {
+              console.warn('광고 에러:', err);
+              goToStatisticsScreen();
+              unsubscribeClose();
+              unsubscribeError();
+            }
+          );
+
+          interstitial.load();
+
+          interstitial.addAdEventListener(AdEventType.LOADED, () => {
+            interstitial.show();
+          });
+        }
+      },
+      { text: "취소", style: "cancel" }
+    ]
+  );
+};
+
 // ✅ 첫 진입시 목표 입력 화면으로 강제 진입
 useEffect(() => {
   setCurrentScreen(0);
@@ -276,7 +377,7 @@ useEffect(() => {
     const sampleGoals = [
       {
         id: '1',
-        goal: '블로그 포스팅',
+        goal: '예시)운동1시간 하기',
         date: todayString,
         time: '15:30',
         reward: '넷플릭스 보기',
@@ -526,7 +627,7 @@ const selectTime = () => {
   };
 
   // 목표 저장 함수
-  const saveGoal = () => {
+  const saveGoal = async () => {
     // 필수 입력 항목 확인
     if (!goal || !goalDate || !goalTime) {
       alert('목표, 날짜, 시간은 필수 입력 항목입니다.');
@@ -565,6 +666,37 @@ const selectTime = () => {
     // 상태 업데이트
     setSavedGoals(updatedGoals);
     saveGoalsToStorage(updatedGoals);
+
+// ✅ 여기 아래부터 푸시 예약 코드 삽입
+try {
+  const [hour, minute] = goalTime.split(':').map(Number);
+  const targetTime = new Date(goalDate);
+  targetTime.setHours(hour, minute, 0);
+
+  // ✅ 현재 시간을 KST 기준으로 보정
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const koreaNow = new Date(utc + 9 * 60 * 60 * 1000);
+
+  const secondsUntil = Math.floor((targetTime.getTime() - koreaNow.getTime()) / 1000);
+  console.log('⏱ secondsUntil:', secondsUntil);
+
+if (secondsUntil >= 5) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `👏 ${goal}, 이제 결과를 선택할 시간이에요.`,
+      body: '완료 처리 또는 제약 설정을 진행해주세요.',
+      sound: true,
+    },
+    trigger: new Date(targetTime.getTime()),  // ← 여기 핵심!
+  });
+  console.log('✅ 푸시 예약됨 (시각 기반):', targetTime.toLocaleString());
+}else {
+    console.log('❌ 알림 예약 생략: 너무 가까운 시간이거나 지난 목표');
+  }
+} catch (error) {
+  console.error('❌ 푸시 예약 실패:', error);
+}
 
     // 입력 필드 초기화
     setGoal('');
@@ -664,7 +796,7 @@ const selectTime = () => {
 
   // 시간 배열 생성 - 1부터 12시까지
   const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-  // 분 배열 생성 - 00부터 59분까지
+  // 분 배열 생성 - 00부터 55분까지 5분 간격
   const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
   // 시간 선택 함수 - 스크롤 정렬과 함께
@@ -714,6 +846,25 @@ const selectTime = () => {
     }
   };
 
+// 제약 상태 업데이트 함수
+const updateConstraintStatus = (goalId, status) => {
+  const updatedGoals = savedGoals.map(goal => {
+    if (goal.id === goalId) {
+      return { ...goal, constraintStatus: status };
+    }
+    return goal;
+  });
+
+  setSavedGoals(updatedGoals);
+  saveGoalsToStorage(updatedGoals);
+
+  if (selectedCalendarDate) {
+    setSelectedDateGoals(updatedGoals.filter(g => g.date === selectedCalendarDate));
+  }
+};
+
+
+
   // 목표 삭제 함수
   const deleteGoal = (goalId) => {
     const updatedGoals = savedGoals.filter(goal => goal.id !== goalId);
@@ -746,41 +897,30 @@ const selectTime = () => {
   };
 
   // 목표 상태에 따른 스타일과 텍스트 가져오기 함수
-  const getStatusInfo = (status) => {
-    switch (status) {
-      case GOAL_STATUS.COMPLETED:
-        return {
-          text: '완료됨',
-          style: styles.completedButton,
-          textStyle: styles.statusButtonText
-        };
-      case GOAL_STATUS.FAILED:
-        return {
-          text: '실패',
-          style: styles.failedButton,
-          textStyle: styles.statusButtonText
-        };
-      case GOAL_STATUS.CONSTRAINED:
-        return {
-          text: '제약중',
-          style: styles.constrainedButton,
-          textStyle: styles.statusButtonText
-        };
-      case GOAL_STATUS.CONSTRAINT_COMPLETED:
-        return {
-          text: '제약완료',
-          style: styles.constraintCompletedButton,
-          textStyle: styles.statusButtonText
-        };
-      case GOAL_STATUS.PENDING:
-      default:
-        return {
-          text: '미완료',
-          style: styles.pendingButton,
-          textStyle: styles.statusButtonText
-        };
-    }
-  };
+const getStatusInfo = (status) => {
+  switch (status) {
+    case GOAL_STATUS.COMPLETED:
+      return {
+        text: '완료됨',
+        style: styles.completedButton,
+        textStyle: styles.statusButtonText
+      };
+    case GOAL_STATUS.FAILED:
+      return {
+        text: '실패',
+        style: styles.failedButton,
+        textStyle: styles.statusButtonText
+      };
+    case GOAL_STATUS.PENDING:
+    default:
+      return {
+        text: '미완료',
+        style: styles.pendingButton,
+        textStyle: styles.statusButtonText
+      };
+  }
+};
+
 
 // 타이머 화면으로 이동
 const navigateToTimerScreen = (selectedGoal) => {
@@ -959,166 +1099,188 @@ return (
 };
 
   // 목표 상세 뷰 화면
-  const GoalDetailScreen = () => {
-    const sortedGoals = sortGoalsByTime(selectedDateGoals);
+   const GoalDetailScreen = () => {
+     const sortedGoals = sortGoalsByTime(selectedDateGoals);
+     const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    // ✅ fadeAnim 선언
-    const fadeAnim = useRef(new Animated.Value(0)).current;
+     useEffect(() => {
+       fadeAnim.setValue(0);
+       Animated.timing(fadeAnim, {
+         toValue: 1,
+         duration: 300,
+         useNativeDriver: Platform.OS !== 'web',
+       }).start();
+     }, []);
 
-    // ✅ 애니메이션 실행
-    useEffect(() => {
-      fadeAnim.setValue(0);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start();
-    }, []);
+     return (
+       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+          {/* ✅ 여기에 광고 삽입! */}
+             <View style={{ alignItems: 'center', marginBottom: 8 }}>
+               <BannerAd
+                 unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-3077862428685229/2520091207'}
+                 size={BannerAdSize.ADAPTIVE_BANNER}
+                 requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+                 onAdFailedToLoad={(err) => console.log('배너 광고 로드 실패:', err)}
+               />
+             </View>
 
-    return (
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        <View style={styles.detailHeader}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={navigateToCalendarView}
-                >
-                  <Text style={styles.backButtonText}>&lt; 돌아가기</Text>
-                </TouchableOpacity>
+         <View style={styles.detailHeader}>
+           <TouchableOpacity
+             style={styles.backButton}
+             onPress={navigateToCalendarView}
+           >
+             <Text style={styles.backButtonText}>&lt; 돌아가기</Text>
+           </TouchableOpacity>
 
-                <Text style={styles.detailTitle}>{selectedCalendarDate} 목표</Text>
-              </View>
+           <Text style={styles.detailTitle}>{selectedCalendarDate} 목표</Text>
+         </View>
 
-        <FlatList
-          data={sortedGoals}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.detailListContent}
-          renderItem={({ item }) => {
-            const statusInfo = getStatusInfo(item.status);
+         <FlatList
+           data={sortedGoals}
+           keyExtractor={(item) => item.id}
+           showsVerticalScrollIndicator={false}
+           contentContainerStyle={styles.detailListContent}
+           renderItem={({ item }) => {
+             const statusInfo = getStatusInfo(item.status);
 
-            return (
-              <TouchableOpacity
-                style={styles.detailCard}
-                onPress={() => navigateToTimerScreen(item)}
-                activeOpacity={0.7}
-              >
-                {/* 목표 카드 헤더 */}
-                <View style={styles.detailCardHeader}>
-                  <View style={styles.timeLabel}>
-                    <Text style={styles.timeLabelText}>{item.time}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.statusButton, statusInfo.style]}
-                    onPress={(e) => {
-                      e.stopPropagation(); // 이벤트 버블링 방지
-                      setCurrentGoalId(item.id);
-                      setShowStatusModal(true);
-                    }}
-                  >
-                    <Text style={statusInfo.textStyle}>
-                      {statusInfo.text}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+             return (
+               <TouchableOpacity
+                 style={styles.detailCard}
+                 onPress={() => navigateToTimerScreen(item)}
+                 activeOpacity={0.7}
+               >
+                 {/* 카드 헤더 */}
+                 <View style={styles.detailCardHeader}>
+                   <View style={styles.timeLabel}>
+                     <Text style={styles.timeLabelText}>{item.time}</Text>
+                   </View>
+                   <TouchableOpacity
+                     style={[styles.statusButton, statusInfo.style]}
+                     onPress={(e) => {
+                       e.stopPropagation();
+                       setCurrentGoalId(item.id);
+                       setShowStatusModal(true);
+                     }}
+                   >
+                     <Text style={statusInfo.textStyle}>
+                       {statusInfo.text}
+                     </Text>
+                   </TouchableOpacity>
+                 </View>
 
-                {/* 목표 제목 */}
-                <Text style={[
-                  styles.detailCardTitle,
-                  item.status === GOAL_STATUS.COMPLETED || item.status === GOAL_STATUS.CONSTRAINT_COMPLETED
-                    ? styles.completedTitleText
-                    : item.status === GOAL_STATUS.FAILED
-                      ? styles.failedTitleText
-                      : {}
-                ]}>
-                  {item.goal}
-                </Text>
+                 {/* 목표 제목 */}
+                 <Text style={[
+                   styles.detailCardTitle,
+                   item.status === GOAL_STATUS.COMPLETED
+                     ? styles.completedTitleText
+                     : item.status === GOAL_STATUS.FAILED
+                       ? styles.failedTitleText
+                       : {}
+                 ]}>
+                   {item.goal}
+                 </Text>
 
-                {/* 목표 상세 정보 */}
-                <View style={styles.detailCardContent}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>보상:</Text>
-                    <Text style={styles.detailValue}>{item.reward || '없음'}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>제약:</Text>
-                    <Text style={styles.detailValue}>{item.penalty || '없음'}</Text>
-                  </View>
+                 {/* 상세 정보 */}
+                 <View style={styles.detailCardContent}>
+                   <View style={styles.detailRow}>
+                     <Text style={styles.detailLabel}>보상:</Text>
+                     <Text style={styles.detailValue}>{item.reward || '없음'}</Text>
+                   </View>
+                   <View style={styles.detailRow}>
+                     <Text style={styles.detailLabel}>제약:</Text>
+                     <Text style={styles.detailValue}>{item.penalty || '없음'}</Text>
+                   </View>
 
-                  {/* 진행 상태 바 */}
-                  <View style={styles.progressContainer}>
-                    <Text style={styles.progressLabel}>진행 상태:</Text>
-                    <View style={styles.progressBar}>
-                      <View
+                   {/* 진행 상태 바 */}
+                   <View style={styles.progressContainer}>
+                     <Text style={styles.progressLabel}>진행 상태:</Text>
+                     <View style={styles.progressBar}>
+                       <View
+                         style={[
+                           styles.progressFill,
+                           {
+                             width: item.status === GOAL_STATUS.COMPLETED
+                               ? '100%'
+                               : item.status === GOAL_STATUS.FAILED
+                                 ? '50%'
+                                 : '0%',
+                             backgroundColor: item.status === GOAL_STATUS.COMPLETED
+                               ? '#22c55e'
+                               : item.status === GOAL_STATUS.FAILED
+                                 ? '#ef4444'
+                                 : '#22c55e'
+                           }
+                         ]}
+                       />
+                     </View>
+                   </View>
+                 </View>
+
+                 {/* 수정/삭제 버튼 */}
+                 <View style={styles.detailCardActions}>
+                   {item.status === GOAL_STATUS.FAILED && (
+                      <TouchableOpacity
                         style={[
-                          styles.progressFill,
-                          {
-                            width: item.status === GOAL_STATUS.COMPLETED
-                              ? '100%'
-                              : item.status === GOAL_STATUS.CONSTRAINT_COMPLETED
-                                ? '100%'
-                                : item.status === GOAL_STATUS.CONSTRAINED
-                                  ? '75%'
-                                  : item.status === GOAL_STATUS.FAILED
-                                    ? '50%'
-                                    : '0%',
-                            backgroundColor: item.status === GOAL_STATUS.COMPLETED
-                              ? '#22c55e'
-                              : item.status === GOAL_STATUS.FAILED
-                                ? '#ef4444'
-                                : item.status === GOAL_STATUS.CONSTRAINED || item.status === GOAL_STATUS.CONSTRAINT_COMPLETED
-                                  ? '#8b5cf6'
-                                  : '#22c55e'
-                          }
+                          styles.constraintButton,
+                          item.constraintStatus === 'completed' && { backgroundColor: '#22c55e' },
+                          item.constraintStatus === 'failed' && { backgroundColor: '#ef4444' }
                         ]}
-                      />
-                    </View>
-                  </View>
-                </View>
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setCurrentGoalId(item.id);
+                          setShowConstraintOptions(true);
+                        }}
+                      >
+                       <Text style={styles.actionButtonText}>
+                           {item.constraintStatus === 'completed'
+                             ? '제약완료'
+                             : item.constraintStatus === 'failed'
+                               ? '제약실패'
+                               : '제약 상태'}
+                         </Text>
+                       </TouchableOpacity>
+                     )}
+                   <TouchableOpacity
+                     style={styles.editButton}
+                     onPress={(e) => {
+                       e.stopPropagation();
+                       const goalToEdit = savedGoals.find(g => g.id === item.id);
+                       if (goalToEdit) {
+                         setEditGoalId(goalToEdit.id);
+                         setEditGoalData({
+                           goal: goalToEdit.goal,
+                           date: goalToEdit.date,
+                           time: goalToEdit.time,
+                           reward: goalToEdit.reward || '',
+                           penalty: goalToEdit.penalty || ''
+                         });
+                         setEditGoalModal(true);
+                       }
+                     }}
+                   >
+                     <Text style={styles.actionButtonText}>수정</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity
+                     style={styles.deleteButton}
+                     onPress={(e) => {
+                       e.stopPropagation();
+                       deleteGoal(item.id);
+                     }}
+                   >
+                     <Text style={styles.actionButtonText}>삭제</Text>
+                   </TouchableOpacity>
+                 </View>
+               </TouchableOpacity>
+             );
+           }}
+         />
+       </Animated.View>
+     );
+   };
 
-                {/* 액션 버튼 */}
-                <View style={styles.detailCardActions}>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={(e) => {
-                      e.stopPropagation(); // 이벤트 버블링 방지
-                      // 수정 모달 열기
-                      console.log('수정 버튼 클릭 - 아이템 ID:', item.id);
-                      const goalToEdit = savedGoals.find(g => g.id === item.id);
-                      if (goalToEdit) {
-                        console.log('수정할 목표 찾음:', goalToEdit);
-                        setEditGoalId(goalToEdit.id);
-                        setEditGoalData({
-                          goal: goalToEdit.goal,
-                          date: goalToEdit.date,
-                          time: goalToEdit.time,
-                          reward: goalToEdit.reward || '',
-                          penalty: goalToEdit.penalty || ''
-                        });
-                        setEditGoalModal(true);
-                      }
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>수정</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={(e) => {
-                      e.stopPropagation(); // 이벤트 버블링 방지
-                      deleteGoal(item.id);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>삭제</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </Animated.View>
-    );
-  };
 
   // 목표 상태 선택 모달 컴포넌트
+  // App.js 내 StatusSelectionModal 컴포넌트
   const StatusSelectionModal = () => (
     <Modal
       visible={showStatusModal}
@@ -1131,6 +1293,7 @@ return (
           <Text style={styles.modalTitle}>목표 상태 변경</Text>
 
           <View style={styles.statusButtonsContainer}>
+            {/* ✅ 미완료 */}
             <TouchableOpacity
               style={[styles.statusSelectionButton, styles.pendingButton]}
               onPress={() => {
@@ -1141,6 +1304,7 @@ return (
               <Text style={styles.statusButtonText}>미완료</Text>
             </TouchableOpacity>
 
+            {/* ✅ 완료됨 */}
             <TouchableOpacity
               style={[styles.statusSelectionButton, styles.completedButton]}
               onPress={() => {
@@ -1151,6 +1315,7 @@ return (
               <Text style={styles.statusButtonText}>완료됨</Text>
             </TouchableOpacity>
 
+            {/* ✅ 실패 */}
             <TouchableOpacity
               style={[styles.statusSelectionButton, styles.failedButton]}
               onPress={() => {
@@ -1159,26 +1324,6 @@ return (
               }}
             >
               <Text style={styles.statusButtonText}>실패</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.statusSelectionButton, styles.constrainedButton]}
-              onPress={() => {
-                updateGoalStatus(currentGoalId, GOAL_STATUS.CONSTRAINED);
-                setShowStatusModal(false);
-              }}
-            >
-              <Text style={styles.statusButtonText}>제약중</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.statusSelectionButton, styles.constraintCompletedButton]}
-              onPress={() => {
-                updateGoalStatus(currentGoalId, GOAL_STATUS.CONSTRAINT_COMPLETED);
-                setShowStatusModal(false);
-              }}
-            >
-              <Text style={styles.statusButtonText}>제약완료</Text>
             </TouchableOpacity>
           </View>
 
@@ -1192,6 +1337,50 @@ return (
       </View>
     </Modal>
   );
+
+  // 🔹 바로 아래에 붙여주세요
+  const ConstraintStatusModal = () => (
+    <Modal
+      visible={showConstraintOptions}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowConstraintOptions(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>제약 상태 선택</Text>
+
+          <TouchableOpacity
+            style={[styles.statusSelectionButton, { backgroundColor: '#4ade80' }]}
+            onPress={() => {
+              updateConstraintStatus(currentGoalId, 'completed');
+              setShowConstraintOptions(false);
+            }}
+          >
+            <Text style={styles.statusButtonText}>제약완료</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.statusSelectionButton, { backgroundColor: '#ef4444' }]}
+            onPress={() => {
+              updateConstraintStatus(currentGoalId, 'failed');
+              setShowConstraintOptions(false);
+            }}
+          >
+            <Text style={styles.statusButtonText}>제약실패</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => setShowConstraintOptions(false)}
+          >
+            <Text style={styles.modalButtonText}>취소</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
 
   // 목표 수정 모달 컴포넌트
   const EditGoalModal = () => (
@@ -1332,8 +1521,10 @@ return (
   <GoalInputScreen />
 ) : currentScreen === 1 ? (
   <GoalCalendarScreen />
-) : (
+) : currentScreen === 2 ? (
   <GoalDetailScreen />
+) : (
+  <StatisticsScreen />   // ✅ 통계 화면 추가
 )}
 
       {/* 하단 탭 내비게이션 (타이머 화면에서는 숨김) */}
@@ -1355,7 +1546,7 @@ return (
             <Icon
               name={currentScreen === 0 ? "create" : "create-outline"}
               size={28}
-              color={currentScreen === 0 ? "#4c1d95" : "#64748b"}
+              color={currentScreen === 0 ? "white" : "#64748b"}
               style={{ marginBottom: 0 }} // 아이콘 위치 미세 조정
             />
             <Text style={[styles.tabText, currentScreen === 0 ? styles.activeTabText : {}]}>
@@ -1370,11 +1561,27 @@ return (
             <Icon
               name={(currentScreen === 1 || currentScreen === 2) ? "calendar" : "calendar-outline"}
               size={28}
-              color={(currentScreen === 1 || currentScreen === 2) ? "#4c1d95" : "#64748b"}
+              color={(currentScreen === 1 || currentScreen === 2) ? "white" : "#64748b"}
               style={{ marginBottom: 0 }} // 아이콘 위치 미세 조정
             />
             <Text style={[styles.tabText, (currentScreen === 1 || currentScreen === 2) ? styles.activeTabText : {}]}>
               목표 달력
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, currentScreen === 4 ? styles.activeTab : {}]}
+            onPress={() => setCurrentScreen(4)}
+             onPress={handleStatisticsAccess} // 광고 → 통계 이동 흐름 포함된 함수로 연결
+            >
+
+            <Icon
+              name={currentScreen === 4 ? "stats-chart" : "stats-chart-outline"}
+              size={28}
+              color={currentScreen === 4 ? "white" : "#64748b"}
+            />
+            <Text style={[styles.tabText, currentScreen === 4 ? styles.activeTabText : {}]}>
+              통계
             </Text>
           </TouchableOpacity>
         </View>
@@ -1730,7 +1937,8 @@ return (
                                   ref={hourScrollViewRef}
                                   showsVerticalScrollIndicator={false}
                                   contentContainerStyle={styles.wheelContentContainer}
-                                  nestedScrollEnabled={true}
+                                  nestedScrollEnabled={false}
+                                  removeClippedSubviews={true}               // ← 이 줄 추가
                                   scrollEventThrottle={16}
                                   onMomentumScrollEnd={(event) => {
                                     // 스크롤이 멈췄을 때 가장 가까운 항목으로 자동 정렬
@@ -1774,7 +1982,8 @@ return (
                                   ref={minuteScrollViewRef}
                                   showsVerticalScrollIndicator={false}
                                   contentContainerStyle={styles.wheelContentContainer}
-                                  nestedScrollEnabled={true}
+                                  nestedScrollEnabled={false}
+                                  removeClippedSubviews={true}
                                   scrollEventThrottle={16}
                                   onMomentumScrollEnd={(event) => {
                                     // 스크롤이 멈췄을 때 가장 가까운 항목으로 자동 정렬
@@ -1863,6 +2072,9 @@ return (
                     {/* 상태 선택 모달 */}
                     <StatusSelectionModal />
 
+                   {/* ✅ 제약 상태 선택 모달 추가 */}
+                    <ConstraintStatusModal />
+
                     {/* 목표 수정 모달 */}
                     <EditGoalModal />
                   </SafeAreaView>
@@ -1873,11 +2085,19 @@ return (
                 container: {
                   flex: 1,
                   backgroundColor: '#1e293b',
+                  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
                 },
  // 새로 추가되는 스타일들
   titleContainer: {
     marginBottom: 24,
     alignItems: 'center',
+  },
+  constraintButton: {
+    backgroundColor: '#6366f1',   // 인디고색
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8
   },
   titleText: {
     fontSize: 24,
@@ -2004,12 +2224,14 @@ return (
                   marginBottom: 4,
                 },
                 tabText: {
-                  fontSize: 12, // 폰트 크기 줄이기
-                  color: '#94a3b8',
-                  marginTop: 2, // 간격 최소화
-                  fontWeight: '500',
-                  textAlign: 'center',
-                  lineHeight: 12, // 라인 높이 최소화
+                  fontSize: 12,
+                    color: '#94a3b8',
+                    marginTop: 2,
+                    fontWeight: '500',
+                    textAlign: 'center',
+                    lineHeight: 14,         // ✅ 줄높이 추가 (기본보다 약간만 높게)
+                    includeFontPadding: false, // ✅ Android에서 텍스트 하단 여백 제거
+                    paddingBottom: 2        // ✅ 하단 공간 추가로 밀림 방지
                 },
                 activeTabText: {
                   color: 'white', // 활성화된 탭은 흰색으로

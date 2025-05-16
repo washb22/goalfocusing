@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "GoalFocusingApp",
+    "name": "골포커싱",
     "slug": "GoalFocusingApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,18 +26,24 @@
         "SCHEDULE_EXACT_ALARM"
       ]
     },
-    "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "35.0.0"
-          }
-        }
-      ]
-    ],
+   "plugins": [
+  [
+    "expo-build-properties",
+    {
+      "android": {
+        "compileSdkVersion": 35,
+        "targetSdkVersion": 34,
+        "buildToolsVersion": "35.0.0"
+      }
+    }
+  ],
+  [
+    "react-native-google-mobile-ads",
+    {
+      "androidAppId": "ca-app-pub-1261617744064551~6220658914"
+    }
+  ]
+],
     "extra": {
       "eas": {
         "projectId": "78ae5a08-c3e1-4b58-af70-2355382a9732"

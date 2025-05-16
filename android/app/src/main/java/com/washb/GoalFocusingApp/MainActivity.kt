@@ -1,4 +1,4 @@
-package com.wkrgud.GoalFocusingApp
+package com.washb.GoalFocusingApp
 
 import android.os.Build
 import android.os.Bundle

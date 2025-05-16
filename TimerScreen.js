@@ -73,6 +73,8 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
   const timerRef = useRef(null);
   const initialTimeRef = useRef(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  // 타이머 완료 상태를 추적하는 새로운 ref 추가
+  const isCompletedRef = useRef(false);
 
   // 디바이스 회전 및 크기 변경에 대응하기 위한 상태
   const [dimensions, setDimensions] = useState({
@@ -131,32 +133,32 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
   const webTimer = useWebTimer(() => {
     setRemainingTime(prev => {
       if (prev <= 1) {
-        animatedValue.setValue(1);
-        handleTimerComplete();
+        if (!isCompletedRef.current) {
+          animatedValue.setValue(1); // 퍼센트 100%로 설정
+          handleTimerComplete(); // 완료 처리 (1회만 실행)
+          isCompletedRef.current = true; // 완료 상태로 표시
+        }
         return 0;
       }
       return prev - 1;
     });
   }, 1000);
 
-  const calculateTimeRemaining = () => {
-    if (!goal || !goal.date || !goal.time) return 0;
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul',
-    });
-    const parts = formatter.formatToParts(now);
-    const hour = parts.find(p => p.type === 'hour')?.value;
-    const minute = parts.find(p => p.type === 'minute')?.value;
-    if (!hour || !minute) return 0;
-    const koreaNow = new Date();
-    koreaNow.setHours(parseInt(hour));
-    koreaNow.setMinutes(parseInt(minute));
-    koreaNow.setSeconds(0);
+const calculateTimeRemaining = () => {
+  if (!goal || !goal.date || !goal.time) return 0;
+
+  const now = new Date();
+
+  // 현재 시각을 한국시간으로 보정
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const koreaNow = new Date(utc + 9 * 60 * 60 * 1000); // KST = UTC+9
+
     const [h, m] = goal.time.split(':').map(Number);
     const target = new Date(goal.date);
     target.setHours(h, m, 0);
-    return koreaNow > target ? 0 : Math.floor((target.getTime() - koreaNow.getTime()) / 1000);
+
+    const diffInSeconds = Math.floor((target.getTime() - koreaNow.getTime()) / 1000);
+    return diffInSeconds > 0 ? diffInSeconds : 0;
   };
 
   // 목표 전체 시간 계산 함수
@@ -184,8 +186,20 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     }
   };
 
+  // ✅ 중복 호출 방지 보강
   const handleTimerComplete = async () => {
+    if (isCompletedRef.current) return;
+
+    isCompletedRef.current = true;  // 🚫 여기서 바로 true로 고정
+    if (goal.status === 'completed' || goal.status === 'failed') {
+      console.log('⛔️ 이미 처리된 목표. 알림 생략');
+      return;
+    }
+
+    // 애니메이션 값을 100%로 설정
+    console.log('⏰ 완료 처리 시작');
     animatedValue.setValue(1);
+
     if (isWeb) {
       webTimer.stop();
       if (window.confirm(`'${goal.goal}' 목표 시간에 도달했습니다! 완료하겠습니까?`)) {
@@ -194,70 +208,58 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     } else {
       if (BackgroundTimer && timerRef.current) BackgroundTimer.clearInterval(timerRef.current);
       if (Vibration) Vibration.vibrate([500, 200, 500]);
-      await Notifications.scheduleNotificationAsync({
-        content: { title: '타이머 완료', body: `'${goal.goal}' 목표 시간에 도달했습니다!`, sound: true },
-        trigger: null,
-      });
-      Alert.alert('타이머 완료', `'${goal.goal}' 목표 시간에 도달했습니다!`, [
-        { text: '완료로 표시', onPress: () => onComplete && onComplete(goal.id, 'completed') },
-        { text: '제약 적용', onPress: () => onComplete && onComplete(goal.id, 'constrained') },
-        { text: '닫기', style: 'cancel' },
-      ]);
+   await Notifications.scheduleNotificationAsync({
+     content: {
+       title: `👏 ${goal.goal}, 이제 결과를 선택할 시간이에요.`,
+       body: '완료/실패 처리 또는 제약 설정을 진행해주세요.',
+       sound: true,
+     },
+     trigger: {
+       seconds: 1, // 즉시 발송 (null 대신 사용 → 백그라운드에서 작동 보장)
+       channelId: 'goal-timer-channel', // Android 채널 ID 필수
+     },
+   });
+    Alert.alert('타이머 완료', `'${goal.goal}' 목표 시간에 도달했습니다!`, [
+      { text: '완료로 표시', onPress: () => onComplete && onComplete(goal.id, 'completed') },
+      { text: '실패로 표시', onPress: () => onComplete && onComplete(goal.id, 'failed') },       // ✅ 추가
+      { text: '제약 설정', onPress: () => onComplete && onComplete(goal.id, 'constrained') },
+      { text: '닫기', style: 'cancel' }
+    ]);
     }
   };
 
-  useEffect(() => {
-    const total = calculateTotalDuration();
-    const remaining = calculateTimeRemaining();
+useEffect(() => {
+  const total = calculateTotalDuration();
+  const remaining = calculateTimeRemaining();
+  setRemainingTime(remaining);
+  initialTimeRef.current = total;
 
-    setRemainingTime(remaining);
-    initialTimeRef.current = total;
+  const interval = setInterval(() => {
+    const updated = calculateTimeRemaining();
+    setRemainingTime(updated);
 
-    // 디버그 로깅
-    console.log('초기 시간:', total, '남은 시간:', remaining);
-
-    if (remaining > 0) {
-      if (isWeb) {
-        webTimer.start();
-      } else if (BackgroundTimer) {
-        timerRef.current = BackgroundTimer.setInterval(() => {
-          setRemainingTime(prev => {
-            if (prev <= 1) {
-              BackgroundTimer.clearInterval(timerRef.current);
-              animatedValue.setValue(1);
-              setTimeout(() => animatedValue.setValue(1), 50);
-              handleTimerComplete();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
-    } else {
-      animatedValue.setValue(1);
+    if (updated <= 0 && !isCompletedRef.current) {
+      handleTimerComplete(); // 푸시 알림 포함 완료 처리
     }
+  }, 1000);
 
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: !isWeb,
-    }).start();
+  return () => clearInterval(interval);
+}, []);
 
-    return () => {
-      if (isWeb) webTimer.stop();
-      else if (BackgroundTimer && timerRef.current) BackgroundTimer.clearInterval(timerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
-    if (initialTimeRef.current > 0 && remainingTime > 0) {
-      const newProgress = 1 - remainingTime / initialTimeRef.current;
-      // 진행 상태 값 범위 검사 (0~1 사이)
-      const clampedProgress = Math.max(0, Math.min(1, newProgress));
-      animatedValue.setValue(clampedProgress);
-
-      // 디버그 로깅
-      console.log('진행률:', clampedProgress, '남은 시간:', remainingTime, '전체 시간:', initialTimeRef.current);
+    if (initialTimeRef.current > 0) {
+      if (remainingTime > 0) {
+        // 남은 시간이 있을 때의 진행률 계산
+        const newProgress = 1 - remainingTime / initialTimeRef.current;
+        const clampedProgress = Math.max(0, Math.min(1, newProgress));
+        animatedValue.setValue(clampedProgress);
+        console.log('진행률:', clampedProgress, '남은 시간:', remainingTime, '전체 시간:', initialTimeRef.current);
+      } else if (remainingTime === 0) {
+        // 남은 시간이 0인 경우 항상 100%로 표시
+        animatedValue.setValue(1);
+        console.log('⏰ 완료! 퍼센트 100% 설정됨');
+      }
     }
   }, [remainingTime]);
 
@@ -269,13 +271,15 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // 퍼센티지 계산 (Infinity 방지)
+  // 퍼센티지 계산 (타이머가 완료되면 항상 100% 반환)
   const getPercentComplete = () => {
+    // 타이머가 완료된 상태면 항상 100% 반환
+    if (isCompletedRef.current || remainingTime === 0) return 100;
+
+    // 정상적인 진행률 계산
     if (initialTimeRef.current <= 0) return 0;
     const rawPercent = (1 - remainingTime / initialTimeRef.current) * 100;
-    // 유효 범위로 제한 (0~100)
     const validPercent = Math.max(0, Math.min(100, rawPercent));
-    // 정수로 변환
     return Math.floor(validPercent);
   };
 
