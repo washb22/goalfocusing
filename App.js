@@ -25,10 +25,11 @@ import { LogBox } from 'react-native';
 import StatisticsScreen from './StatisticsScreen';
 import { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { Alert } from 'react-native';
-import { Platform } from 'react-native';  // ← 이거 꼭 필요!
 import dayjs from 'dayjs';
+import GoalTimerService from './GoalTimerService';
 LogBox.ignoreAllLogs(false);
 console.log('🟢 App.js 진입됨');
+
 
 
 // ✅ 포그라운드 푸시 알림 핸들러 설정
@@ -39,6 +40,8 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+
 
 
 // 목표 상태 상수 정의
@@ -92,41 +95,101 @@ const goToStatisticsScreen = () => {
 };
 
 
-/// 🔊 알림 초기 설정 (권한 요청 + Android 채널 생성)
- useEffect(() => {
-   async function setupNotifications() {
-     const { status } = await Notifications.requestPermissionsAsync();
-     if (status !== 'granted') {
-       alert('알림 권한이 거부되었습니다.');
-       return;
+
+useEffect(() => {
+  const setupNotifications = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      alert('알림 권한이 거부되었습니다.');
+      return;
+    }
+
+    // Android에서는 알림 채널 설정이 필요
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('goal-timer-channel', {
+        name: '목표 타이머 알림',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#8b5cf6',
+        sound: true,
+      });
+    }
+
+    // 알림 핸들러 설정
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+
+    // ✅ 백그라운드에서 앱이 열린 경우와 포그라운드 알림 클릭을 통합 처리
+   const handleNotificationResponse = async (response) => {
+
+     // notification 안의 data에서 추출
+     const notificationData = response.notification?.request?.content?.data?.notification?.data || {};
+     const goalId = notificationData.goalId;
+     const isPersistent = notificationData.isPersistent;
+
+
+     if (goalId) {
+       // savedGoals가 이미 로드되어 있는지 확인
+       let goals = savedGoals;
+       if (goals.length === 0) {
+         goals = await loadGoalsFromStorage();
+       }
+
+       const targetGoal = goals.find(goal => goal.id === goalId);
+
+       if (targetGoal) {
+         setSelectedGoalForTimer(targetGoal);
+         setCurrentScreen(3);
+       } else {
+         setCurrentScreen(1);
+       }
      }
+   };
+        // 백그라운드에서 앱이 열린 경우
+        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastNotificationResponse) {
+          handleNotificationResponse(lastNotificationResponse);
+        }
 
-     // Android에서는 알림 채널 설정이 필요
-     if (Platform.OS === 'android') {
-       await Notifications.setNotificationChannelAsync('goal-timer-channel', {
-         name: '목표 타이머 알림',
-         importance: Notifications.AndroidImportance.HIGH,
-         vibrationPattern: [0, 250, 250, 250],
-         lightColor: '#8b5cf6', // 보라색
-         sound: true,
-       });
-     }
+        // 포그라운드에서 알림 클릭한 경우
+        const notificationListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
 
-     // 알림 핸들러 설정 - 앱이 포그라운드 상태일 때도 알림을 표시하기 위함
-     Notifications.setNotificationHandler({
-       handleNotification: async () => ({
-         shouldShowAlert: true,
-         shouldPlaySound: true,
-         shouldSetBadge: false,
-       }),
-     });
-   }
+        return () => {
+          if (notificationListener) {
+            Notifications.removeNotificationSubscription(notificationListener);
+          }
+        };
+      };
 
-   setupNotifications();
- }, []);
+      setupNotifications();
+    }, []);
 
 
+// 3. savedGoals와 pendingNotificationGoalId가 모두 준비되었을 때 네비게이션 처리
+useEffect(() => {
+  if (pendingNotificationGoalId && savedGoals.length > 0) {
+    console.log('알림으로부터 네비게이션 시작:', pendingNotificationGoalId);
 
+    // 목표 찾기
+    const targetGoal = savedGoals.find(goal => goal.id === pendingNotificationGoalId);
+
+   if (targetGoal) {
+     setSelectedGoalForTimer(targetGoal);
+     setTimeout(() => {
+       setCurrentScreen(3);
+     }, 50); // 약간의 지연 추가 (비동기 상태 반영 보장)
+     setPendingNotificationGoalId(null);
+   }else {
+      console.log('목표를 찾을 수 없습니다:', pendingNotificationGoalId);
+      setPendingNotificationGoalId(null);
+    }
+  }
+}, [savedGoals, pendingNotificationGoalId]);
 
   // 기본 상태 변수
   const [goal, setGoal] = useState('');
@@ -139,6 +202,7 @@ const goToStatisticsScreen = () => {
   const [selectedGoalForTimer, setSelectedGoalForTimer] = useState(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
   const [selectedDateGoals, setSelectedDateGoals] = useState([]);
+  const [pendingNotificationGoalId, setPendingNotificationGoalId] = useState(null);
 
   // 임시 입력값 (모달용)
   const [tempGoal, setTempGoal] = useState('');
@@ -194,10 +258,26 @@ const goToStatisticsScreen = () => {
   // 타이머 완료 처리 함수
   const handleTimerComplete = (goalId, newStatus) => {
     console.log('타이머 완료:', goalId, newStatus);
-    updateGoalStatus(goalId, newStatus);
-    setCurrentScreen(2);
-  };
 
+    // 목표 상태 업데이트
+    updateGoalStatus(goalId, newStatus);
+
+    // 완료된 목표의 날짜를 확실히 설정
+    const completedGoal = savedGoals.find(g => g.id === goalId);
+    if (completedGoal && completedGoal.date) {
+      setSelectedCalendarDate(completedGoal.date);
+      const dateGoals = savedGoals.filter(g => g.date === completedGoal.date);
+      setSelectedDateGoals(dateGoals);
+
+      // 약간의 지연 후 화면 전환 (상태 업데이트 보장)
+      setTimeout(() => {
+        setCurrentScreen(2);
+      }, 100);
+    } else {
+      // 문제가 있으면 달력 화면으로
+      setCurrentScreen(1);
+    }
+  };
 
 // 뒤로가기 버튼 처리를 위한 useEffect
 useEffect(() => {
@@ -250,6 +330,27 @@ useEffect(() => {
 
   return () => backHandler.remove(); // 컴포넌트 언마운트 시 이벤트 리스너 제거
 }, [currentScreen]); // currentScreen 변경 시 이벤트 리스너 업데이트
+
+
+// 목표 타이머 서비스 시작을 위한 별도의 useEffect
+useEffect(() => {
+  GoalTimerService.start();
+
+  return () => {
+    GoalTimerService.stop();
+  };
+}, []); // 앱 시작시 한 번만 실행
+
+// 목표가 변경될 때마다 알림 업데이트
+useEffect(() => {
+  if (savedGoals.length > 0) {
+    GoalTimerService.updatePersistentNotification();
+  }
+}, [savedGoals]);
+
+
+
+
 
 
 //시간 선택기 초기화 (현재 시각 기준)
@@ -306,7 +407,7 @@ useEffect(() => {
     loadSavedGoals();
   }, []);
 
-  //통계탭 진입시 하루한번 전면광고
+//통계탭 진입시 하루한번 전면광고
 const interstitialAdUnitId = __DEV__
   ? TestIds.INTERSTITIAL
   : Platform.OS === 'ios'
@@ -317,6 +418,18 @@ const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
   requestNonPersonalizedAdsOnly: true,
 });
 
+// 광고 로드 상태
+let isAdLoaded = false;
+
+interstitial.addAdEventListener(AdEventType.LOADED, () => {
+  console.log('광고 로드 완료');
+  isAdLoaded = true;
+});
+
+interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+  isAdLoaded = false;
+});
+
 // 목표화면 배너광고
 const bannerAdUnitId = __DEV__
   ? TestIds.BANNER
@@ -324,10 +437,24 @@ const bannerAdUnitId = __DEV__
     ? 'ca-app-pub-3077862428685229/8453269694'  // iOS 배너
     : 'ca-app-pub-3077862428685229/2520091207'; // Android 배너
 
+// 통계 탭 진입 시 미리 로드
+const handleStatisticsTabPress = () => {
+  // 광고가 필요한 경우에만 미리 로드 시작
+  const checkAndLoadAd = async () => {
+    const today = dayjs().format('YYYY-MM-DD');
+    const lastShown = await AsyncStorage.getItem('lastAdDate');
 
+    if (lastShown !== today && !isAdLoaded) {
+      interstitial.load(); // 여기서 미리 로드 시작
+    }
+  };
+
+  checkAndLoadAd();
+  handleStatisticsAccess(); // 기존 함수 호출
+};
 
 // 전면광고 + 하루 1회 제한 + 통계탭 진입 함수
-  const handleStatisticsAccess = async () => {
+const handleStatisticsAccess = async () => {
   const today = dayjs().format('YYYY-MM-DD');
   const lastShown = await AsyncStorage.getItem('lastAdDate');
 
@@ -343,42 +470,44 @@ const bannerAdUnitId = __DEV__
       {
         text: "확인",
         onPress: () => {
-          const unsubscribeClose = interstitial.addAdEventListener(
-            AdEventType.CLOSED,
-            async () => {
-              await AsyncStorage.setItem('lastAdDate', today);
-              goToStatisticsScreen();
-              unsubscribeClose();
-            }
-          );
-
-          const unsubscribeError = interstitial.addAdEventListener(
-            AdEventType.ERROR,
-            (err) => {
-              console.warn('광고 에러:', err);
-              goToStatisticsScreen();
-              unsubscribeClose();
-              unsubscribeError();
-            }
-          );
-
-          interstitial.load();
-
-          interstitial.addAdEventListener(AdEventType.LOADED, () => {
+          if (isAdLoaded) {
+            // 광고가 이미 로드되어 있으면 바로 표시
             interstitial.show();
-          });
+            AsyncStorage.setItem('lastAdDate', today);
+            goToStatisticsScreen();
+          } else {
+            // 광고가 아직 로드되지 않았으면
+            const unsubscribeClose = interstitial.addAdEventListener(
+              AdEventType.CLOSED,
+              async () => {
+                await AsyncStorage.setItem('lastAdDate', today);
+                goToStatisticsScreen();
+                unsubscribeClose();
+              }
+            );
+
+            const unsubscribeError = interstitial.addAdEventListener(
+              AdEventType.ERROR,
+              (err) => {
+                console.warn('광고 에러:', err);
+                goToStatisticsScreen();
+                unsubscribeClose();
+                unsubscribeError();
+              }
+            );
+
+            interstitial.load();
+
+            interstitial.addAdEventListener(AdEventType.LOADED, () => {
+              interstitial.show();
+            });
+          }
         }
       },
       { text: "취소", style: "cancel" }
     ]
   );
 };
-
-// ✅ 첫 진입시 목표 입력 화면으로 강제 진입
-useEffect(() => {
-  setCurrentScreen(0);
-}, []);
-
   // 예시 목표 데이터 생성 (테스트용)
   const createSampleGoals = () => {
     const today = new Date();
@@ -697,9 +826,16 @@ if (secondsUntil >= 5) {
       title: `👏 ${goal}, 이제 결과를 선택할 시간이에요.`,
       body: '완료 처리 또는 제약 설정을 진행해주세요.',
       sound: true,
-    },
-    trigger: new Date(targetTime.getTime()),  // ← 여기 핵심!
-  });
+ // ✅ 목표 ID를 데이터로 추가
+          data: {
+            goalId: newGoal.id,
+            goalTitle: goal,
+            goalDate: goalDate,
+            goalTime: goalTime
+          }
+        },
+        trigger: new Date(targetTime.getTime()),
+      });
   console.log('✅ 푸시 예약됨 (시각 기반):', targetTime.toLocaleString());
 }else {
     console.log('❌ 알림 예약 생략: 너무 가까운 시간이거나 지난 목표');
@@ -1582,7 +1718,7 @@ return (
           <TouchableOpacity
             style={[styles.tabButton, currentScreen === 4 ? styles.activeTab : {}]}
             onPress={() => setCurrentScreen(4)}
-             onPress={handleStatisticsAccess} // 광고 → 통계 이동 흐름 포함된 함수로 연결
+             nPress={handleStatisticsTabPress} // 광고 → 통계 이동 흐름 포함된 함수로 연결
             >
 
             <Icon

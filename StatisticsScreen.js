@@ -491,20 +491,20 @@ const showAdOncePerDay = async () => {
           </View>
         </View>
 
-        {/* 표준 배너 광고 (320x50) */}
-        <View style={styles.standardBannerContainer}>
-          <BannerAd
-            unitId={adUnitId}
-            size={BannerAdSize.BANNER} // BANNER는 320x50 표준 크기
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: true,
-            }}
-            onAdFailedToLoad={(error) => {
-              console.log('광고 로드 실패:', error);
-              setAdError(true);
-            }}
-          />
-        </View>
+       {/* 표준 배너 광고 (320x50) */}
+       <View style={styles.standardBannerContainer}>
+         <BannerAd
+           unitId={adUnitId}
+           size={BannerAdSize.ADAPTIVE_BANNER} // BANNER → ADAPTIVE_BANNER로 변경
+           requestOptions={{
+             requestNonPersonalizedAdsOnly: true,
+           }}
+           onAdFailedToLoad={(error) => {
+             console.log('광고 로드 실패:', error);
+             setAdError(true);
+           }}
+         />
+       </View>
 
         {/* 하단 여백을 최소화 - 더 이상 더 많은 페이딩 영역이 보이지 않도록 함 */}
         <View style={styles.bottomSpacing} />
@@ -713,17 +713,17 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
 
-  // 표준 배너 광고 컨테이너 (320x50)
-  standardBannerContainer: {
-    width: '100%',
-    height: 50, // 표준 배너 높이
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 30, // 하단 여백 약간 추가
-  },
+// 표준 배너 광고 컨테이너 (320x50)
+standardBannerContainer: {
+  width: '100%',
+  height: 60, // 50에서 60으로 변경 (ADAPTIVE_BANNER는 더 높을 수 있음)
+  backgroundColor: '#ffffff',
+  borderRadius: 8,
+  overflow: 'hidden',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 30,
+},
 
   // 대목표 카드 - 비어있을 때
   bigGoalEmptyCard: {
