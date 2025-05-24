@@ -23,12 +23,25 @@ import { BackHandler } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { LogBox } from 'react-native';
 import StatisticsScreen from './StatisticsScreen';
-import { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import mobileAds, { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { Alert } from 'react-native';
+import { Image } from 'react-native';
 import dayjs from 'dayjs';
-import GoalTimerService from './GoalTimerService';
+let GoalTimerService = null;
+if (Platform.OS === 'android') {
+  GoalTimerService = require('./GoalTimerService').default;
+}
 LogBox.ignoreAllLogs(false);
 console.log('🟢 App.js 진입됨');
+
+
+// 이미지 경로 설정
+const onboardingImages = {
+  goalInput: require('./assets/onboarding1.png'),
+  timer: require('./assets/onboarding2.png'),
+  statistics: require('./assets/onboarding3.png'),
+};
+
 
 
 
@@ -346,21 +359,29 @@ useEffect(() => {
 }, [currentScreen]); // currentScreen 변경 시 이벤트 리스너 업데이트
 
 
+
+
+
+
 // 목표 타이머 서비스 시작을 위한 별도의 useEffect
 useEffect(() => {
-  GoalTimerService.start();
+  if (Platform.OS === 'android' && GoalTimerService) {
+    GoalTimerService.start();
 
-  return () => {
-    GoalTimerService.stop();
-  };
-}, []); // 앱 시작시 한 번만 실행
+    return () => {
+      GoalTimerService.stop();
+    };
+  }
+}, []);
+
 
 // 목표가 변경될 때마다 알림 업데이트
 useEffect(() => {
-  if (savedGoals.length > 0) {
+  if (savedGoals.length > 0 && Platform.OS === 'android' && GoalTimerService) {
     GoalTimerService.updatePersistentNotification();
   }
 }, [savedGoals]);
+
 
 
 // 앱 시작시 저장된 목표 데이터 불러오기 useEffect 수정
@@ -388,6 +409,15 @@ useEffect(() => {
 }, []);
 
 
+
+// ← 여기에 새로운 useEffect 추가
+useEffect(() => {
+  mobileAds()
+    .initialize()
+    .then(adapterStatuses => {
+      console.log('Google Mobile Ads initialized:', adapterStatuses);
+    });
+}, []);
 
 
 
@@ -1733,58 +1763,16 @@ const OnboardingScreen = () => {
   const { title, content, preview } = getOnboardingContent();
 
   // renderPreview 함수를 여기에 정의
-  const renderPreview = () => {
-    switch (preview) {
-      case 'goalInput':
-        return (
-          <View style={styles.previewContainer}>
-            <View style={styles.previewScreen}>
-              <Text style={styles.previewTitle}>달성목표</Text>
-              <View style={styles.previewInput}>
-                <Text style={styles.previewInputText}>운동 1시간 하기</Text>
-              </View>
-              <View style={styles.previewInput}>
-                <Text style={styles.previewInputText}>2025-05-24</Text>
-              </View>
-              <View style={styles.previewInput}>
-                <Text style={styles.previewInputText}>18:00</Text>
-              </View>
-            </View>
-          </View>
-        );
-      case 'timer':
-        return (
-          <View style={styles.previewContainer}>
-            <View style={styles.previewScreen}>
-              <View style={styles.previewTimer}>
-                <Text style={styles.previewTimerText}>00:45:30</Text>
-                <View style={styles.previewProgressBar}>
-                  <View style={[styles.previewProgress, { width: '75%' }]} />
-                </View>
-              </View>
-            </View>
-          </View>
-        );
-      case 'statistics':
-        return (
-          <View style={styles.previewContainer}>
-            <View style={styles.previewScreen}>
-              <Text style={styles.previewStatsTitle}>주간 성공률</Text>
-              <Text style={styles.previewStatsPercent}>85%</Text>
-              <View style={styles.previewChart}>
-                {[80, 90, 75, 100, 85, 90, 80].map((height, index) => (
-                  <View key={index} style={styles.previewBarContainer}>
-                    <View style={[styles.previewBar, { height: `${height}%` }]} />
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
+const renderPreview = () => {
+  const imageSource = onboardingImages[preview];
+  if (!imageSource) return null;
+
+  return (
+    <View style={styles.previewContainer}>
+      <Image source={imageSource} style={styles.previewImage} />
+    </View>
+  );
+};
 
   return (
     <SafeAreaView style={styles.onboardingContainer}>
@@ -3209,5 +3197,11 @@ const OnboardingScreen = () => {
                   backgroundColor: '#22c55e',
                   borderRadius: 2,
                   width: '100%',
-                }
+                },
+previewImage: {
+  width: 240,
+  height: 400,
+  borderRadius: 12,
+  resizeMode: 'contain',
+}
             });
