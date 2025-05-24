@@ -203,6 +203,8 @@ useEffect(() => {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
   const [selectedDateGoals, setSelectedDateGoals] = useState([]);
   const [pendingNotificationGoalId, setPendingNotificationGoalId] = useState(null);
+const [showOnboarding, setShowOnboarding] = useState(false);
+const [onboardingStep, setOnboardingStep] = useState(1);
 
   // 임시 입력값 (모달용)
   const [tempGoal, setTempGoal] = useState('');
@@ -255,29 +257,41 @@ useEffect(() => {
   const minuteScrollViewRef = useRef(null);
 
 
-  // 타이머 완료 처리 함수
-  const handleTimerComplete = (goalId, newStatus) => {
-    console.log('타이머 완료:', goalId, newStatus);
+// 타이머 완료 처리 함수
+const handleTimerComplete = async (goalId, newStatus) => {
+  console.log('타이머 완료:', goalId, newStatus);
 
-    // 목표 상태 업데이트
-    updateGoalStatus(goalId, newStatus);
+  // 최신 목표 데이터를 AsyncStorage에서 다시 로드
+  const latestGoals = await loadGoalsFromStorage();
 
-    // 완료된 목표의 날짜를 확실히 설정
-    const completedGoal = savedGoals.find(g => g.id === goalId);
-    if (completedGoal && completedGoal.date) {
-      setSelectedCalendarDate(completedGoal.date);
-      const dateGoals = savedGoals.filter(g => g.date === completedGoal.date);
-      setSelectedDateGoals(dateGoals);
-
-      // 약간의 지연 후 화면 전환 (상태 업데이트 보장)
-      setTimeout(() => {
-        setCurrentScreen(2);
-      }, 100);
-    } else {
-      // 문제가 있으면 달력 화면으로
-      setCurrentScreen(1);
+  // 목표 상태 업데이트
+  const updatedGoals = latestGoals.map(goal => {
+    if (goal.id === goalId) {
+      return { ...goal, status: newStatus };
     }
-  };
+    return goal;
+  });
+
+  // 상태 저장
+  setSavedGoals(updatedGoals);
+  await saveGoalsToStorage(updatedGoals);
+
+  // 완료된 목표의 날짜를 확실히 설정
+  const completedGoal = updatedGoals.find(g => g.id === goalId);
+  if (completedGoal && completedGoal.date) {
+    setSelectedCalendarDate(completedGoal.date);
+    const dateGoals = updatedGoals.filter(g => g.date === completedGoal.date);
+    setSelectedDateGoals(dateGoals);
+
+    // 약간의 지연 후 화면 전환 (상태 업데이트 보장)
+    setTimeout(() => {
+      setCurrentScreen(2);
+    }, 100);
+  } else {
+    // 문제가 있으면 달력 화면으로
+    setCurrentScreen(1);
+  }
+};
 
 // 뒤로가기 버튼 처리를 위한 useEffect
 useEffect(() => {
@@ -348,6 +362,30 @@ useEffect(() => {
   }
 }, [savedGoals]);
 
+
+// 앱 시작시 저장된 목표 데이터 불러오기 useEffect 수정
+useEffect(() => {
+  const initializeApp = async () => {
+    // 첫 실행 여부 체크
+    const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
+    }
+
+    // 기존 목표 로드 로직
+    const savedGoalsData = await loadGoalsFromStorage();
+    if (savedGoalsData.length > 0) {
+      console.log('목표 데이터 로드 성공:', savedGoalsData.length, '개 항목');
+      setSavedGoals(savedGoalsData);
+    } else {
+      console.log('저장된 목표 없음, 샘플 데이터 사용');
+      createSampleGoals();
+    }
+  };
+
+  initializeApp();
+}, []);
 
 
 
@@ -1647,91 +1685,254 @@ return (
     </Modal>
   );
 
+// 온보딩 화면 컴포넌트
+const OnboardingScreen = () => {
+  const handleNext = () => {
+    if (onboardingStep < 3) {
+      setOnboardingStep(onboardingStep + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (onboardingStep > 1) {
+      setOnboardingStep(onboardingStep - 1);
+    }
+  };
+
+  const handleFinish = async () => {
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+    setOnboardingStep(1);
+  };
+
+  const getOnboardingContent = () => {
+    switch (onboardingStep) {
+      case 1:
+        return {
+          title: "목표는 작고, 결심은 단단하게",
+          content: "내가 끝낼 수 있는 작은 목표 하나씩.\n\n보상과 제약이 이 앱의 핵심입니다.\n\n제약이 없으면 사람은 움직이지 않습니다.",
+          preview: 'goalInput'
+        };
+      case 2:
+        return {
+          title: "시간은 갑니다",
+          content: "시간이 되면 솔직하게 선택하세요.\n\n완료 / 실패 / 제약실행",
+          preview: 'timer'
+        };
+      case 3:
+        return {
+          title: "'할 줄 아는 사람'이 되는 과정",
+          content: "내가 얼마나 해냈는지 숫자로 확인.\n\n실패에 대한 핑계는 없습니다 오로지 실행뿐.",
+          preview: 'statistics'
+        };
+      default:
+        return { title: "", content: "", preview: null };
+    }
+  };
+
+  const { title, content, preview } = getOnboardingContent();
+
+  // renderPreview 함수를 여기에 정의
+  const renderPreview = () => {
+    switch (preview) {
+      case 'goalInput':
+        return (
+          <View style={styles.previewContainer}>
+            <View style={styles.previewScreen}>
+              <Text style={styles.previewTitle}>달성목표</Text>
+              <View style={styles.previewInput}>
+                <Text style={styles.previewInputText}>운동 1시간 하기</Text>
+              </View>
+              <View style={styles.previewInput}>
+                <Text style={styles.previewInputText}>2025-05-24</Text>
+              </View>
+              <View style={styles.previewInput}>
+                <Text style={styles.previewInputText}>18:00</Text>
+              </View>
+            </View>
+          </View>
+        );
+      case 'timer':
+        return (
+          <View style={styles.previewContainer}>
+            <View style={styles.previewScreen}>
+              <View style={styles.previewTimer}>
+                <Text style={styles.previewTimerText}>00:45:30</Text>
+                <View style={styles.previewProgressBar}>
+                  <View style={[styles.previewProgress, { width: '75%' }]} />
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+      case 'statistics':
+        return (
+          <View style={styles.previewContainer}>
+            <View style={styles.previewScreen}>
+              <Text style={styles.previewStatsTitle}>주간 성공률</Text>
+              <Text style={styles.previewStatsPercent}>85%</Text>
+              <View style={styles.previewChart}>
+                {[80, 90, 75, 100, 85, 90, 80].map((height, index) => (
+                  <View key={index} style={styles.previewBarContainer}>
+                    <View style={[styles.previewBar, { height: `${height}%` }]} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.onboardingContainer}>
+      <View style={styles.onboardingContent}>
+        <View style={styles.stepIndicatorContainer}>
+          {[1, 2, 3].map((step) => (
+            <View
+              key={step}
+              style={[
+                styles.stepIndicator,
+                step === onboardingStep && styles.activeStepIndicator
+              ]}
+            />
+          ))}
+        </View>
+
+        <View style={styles.onboardingTextContainer}>
+          <Text style={styles.onboardingTitle}>{title}</Text>
+          <Text style={styles.onboardingText}>{content}</Text>
+        </View>
+
+        {/* 미리보기 화면 */}
+        {renderPreview()}
+
+        <View style={styles.onboardingButtonContainer}>
+          <View style={styles.onboardingButtonRow}>
+            {/* 이전 버튼 - 첫 페이지가 아닐 때만 표시 */}
+            {onboardingStep > 1 && (
+              <TouchableOpacity
+                style={[styles.onboardingButton, styles.prevButton]}
+                onPress={handlePrev}
+              >
+                <Text style={styles.onboardingButtonText}>이전</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 다음/시작하기 버튼 */}
+            {onboardingStep < 3 ? (
+              <TouchableOpacity
+                style={[styles.onboardingButton, styles.nextButton]}
+                onPress={handleNext}
+              >
+                <Text style={styles.onboardingButtonText}>다음</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.onboardingButton, styles.startButton]}
+                onPress={handleFinish}
+              >
+                <Text style={styles.onboardingButtonText}>시작하기</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
-        barStyle="light-content"    // 아이콘을 흰색으로 설정 (다크 테마)
-        backgroundColor="transparent" // 배경을 투명하게 설정
-        translucent={true}         // 앱 컨텐츠가 상태 표시줄 뒤로 확장되도록 설정
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
       />
 
-
-{/* 현재 화면에 따라 표시 */}
-{currentScreen === 3 && selectedGoalForTimer ? (
-  <TimerScreen
-    goal={selectedGoalForTimer}
-    onBack={() => setCurrentScreen(2)}
-    onComplete={handleTimerComplete}
-  />
-) : currentScreen === 0 ? (
-  <GoalInputScreen />
-) : currentScreen === 1 ? (
-  <GoalCalendarScreen />
-) : currentScreen === 2 ? (
-  <GoalDetailScreen />
-) : (
-  <StatisticsScreen />   // ✅ 통계 화면 추가
-)}
-
-      {/* 하단 탭 내비게이션 (타이머 화면에서는 숨김) */}
-      {currentScreen !== 3 && (
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tabButton, currentScreen === 0 ? styles.activeTab : {}]}
-            onPress={() => {
-              // 강제 리렌더링을 위한 코드 추가
-              if (currentScreen === 0) {
-                // 이미 목표 입력 화면인 경우 상태 재설정 로직 추가
-                setGoal(goal); // 같은 값 설정으로 리렌더링 유도
-                setGoalDate(goalDate);
-                setGoalTime(goalTime);
-              }
-              setCurrentScreen(0);
-            }}
-          >
-            <Icon
-              name={currentScreen === 0 ? "create" : "create-outline"}
-              size={28}
-              color={currentScreen === 0 ? "white" : "#64748b"}
-              style={{ marginBottom: 0 }} // 아이콘 위치 미세 조정
+      {/* 온보딩 화면 표시 */}
+      {showOnboarding ? (
+        <OnboardingScreen />
+      ) : (
+        <>
+          {/* 현재 화면에 따라 표시 */}
+          {currentScreen === 3 && selectedGoalForTimer ? (
+            <TimerScreen
+              goal={selectedGoalForTimer}
+              onBack={() => setCurrentScreen(2)}
+              onComplete={handleTimerComplete}
             />
-            <Text style={[styles.tabText, currentScreen === 0 ? styles.activeTabText : {}]}>
-              목표 입력
-            </Text>
-          </TouchableOpacity>
+          ) : currentScreen === 0 ? (
+            <GoalInputScreen />
+          ) : currentScreen === 1 ? (
+            <GoalCalendarScreen />
+          ) : currentScreen === 2 ? (
+            <GoalDetailScreen />
+          ) : (
+            <StatisticsScreen />
+          )}
 
-          <TouchableOpacity
-            style={[styles.tabButton, (currentScreen === 1 || currentScreen === 2) ? styles.activeTab : {}]}
-            onPress={() => setCurrentScreen(1)}
-          >
-            <Icon
-              name={(currentScreen === 1 || currentScreen === 2) ? "calendar" : "calendar-outline"}
-              size={28}
-              color={(currentScreen === 1 || currentScreen === 2) ? "white" : "#64748b"}
-              style={{ marginBottom: 0 }} // 아이콘 위치 미세 조정
-            />
-            <Text style={[styles.tabText, (currentScreen === 1 || currentScreen === 2) ? styles.activeTabText : {}]}>
-              목표 달력
-            </Text>
-          </TouchableOpacity>
+          {/* 하단 탭 내비게이션 (타이머 화면에서는 숨김) */}
+          {currentScreen !== 3 && (
+            <View style={styles.tabBar}>
+              <TouchableOpacity
+                style={[styles.tabButton, currentScreen === 0 ? styles.activeTab : {}]}
+                onPress={() => {
+                  if (currentScreen === 0) {
+                    setGoal(goal);
+                    setGoalDate(goalDate);
+                    setGoalTime(goalTime);
+                  }
+                  setCurrentScreen(0);
+                }}
+              >
+                <Icon
+                  name={currentScreen === 0 ? "create" : "create-outline"}
+                  size={28}
+                  color={currentScreen === 0 ? "white" : "#64748b"}
+                  style={{ marginBottom: 0 }}
+                />
+                <Text style={[styles.tabText, currentScreen === 0 ? styles.activeTabText : {}]}>
+                  목표 입력
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tabButton, currentScreen === 4 ? styles.activeTab : {}]}
-            onPress={() => setCurrentScreen(4)}
-             nPress={handleStatisticsTabPress} // 광고 → 통계 이동 흐름 포함된 함수로 연결
-            >
+              <TouchableOpacity
+                style={[styles.tabButton, (currentScreen === 1 || currentScreen === 2) ? styles.activeTab : {}]}
+                onPress={() => setCurrentScreen(1)}
+              >
+                <Icon
+                  name={(currentScreen === 1 || currentScreen === 2) ? "calendar" : "calendar-outline"}
+                  size={28}
+                  color={(currentScreen === 1 || currentScreen === 2) ? "white" : "#64748b"}
+                  style={{ marginBottom: 0 }}
+                />
+                <Text style={[styles.tabText, (currentScreen === 1 || currentScreen === 2) ? styles.activeTabText : {}]}>
+                  목표 달력
+                </Text>
+              </TouchableOpacity>
 
-            <Icon
-              name={currentScreen === 4 ? "stats-chart" : "stats-chart-outline"}
-              size={28}
-              color={currentScreen === 4 ? "white" : "#64748b"}
-            />
-            <Text style={[styles.tabText, currentScreen === 4 ? styles.activeTabText : {}]}>
-              통계
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={[styles.tabButton, currentScreen === 4 ? styles.activeTab : {}]}
+                onPress={handleStatisticsTabPress}
+              >
+                <Icon
+                  name={currentScreen === 4 ? "stats-chart" : "stats-chart-outline"}
+                  size={28}
+                  color={currentScreen === 4 ? "white" : "#64748b"}
+                />
+                <Text style={[styles.tabText, currentScreen === 4 ? styles.activeTabText : {}]}>
+                  통계
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
       )}
+
+
 
       {/* 목표 입력 모달 */}
       <Modal
@@ -2835,5 +3036,178 @@ return (
                   borderRadius: 8,
                   alignItems: 'center',
                   marginBottom: 8,
+                },
+                // 온보딩 스타일
+                onboardingContainer: {
+                  flex: 1,
+                  backgroundColor: '#1e293b',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 24,
+                },
+                onboardingContent: {
+                  flex: 1,
+                  width: '100%',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingVertical: 20,
+                },
+                stepIndicatorContainer: {
+                  flexDirection: 'row',
+                  marginBottom: 40,
+                },
+                stepIndicator: {
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: '#475569',
+                  marginHorizontal: 4,
+                },
+                activeStepIndicator: {
+                  backgroundColor: '#8b5cf6',
+                  width: 24,
+                },
+                onboardingTitle: {
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                  color: '#ffffff',
+                  marginBottom: 16,
+                  textAlign: 'center',
+                },
+                onboardingText: {
+                  fontSize: 16,
+                  color: '#cbd5e1',
+                  textAlign: 'center',
+                  lineHeight: 24,
+                  marginBottom: 24,
+                },
+                onboardingButtonContainer: {
+             marginTop: 'auto',  // 추가
+              marginBottom: 40,   // 추가
+              width: '100%',
+              paddingHorizontal: 24,  // 추가
+            },
+            onboardingTextContainer: {
+              alignItems: 'center',
+              marginVertical: 20,
+            },
+                onboardingButton: {
+                  backgroundColor: '#8b5cf6',
+                  paddingVertical: 16,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                },
+                onboardingButtonText: {
+                  color: '#ffffff',
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                },
+                onboardingButtonRow: {
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  gap: 12,
+                },
+                prevButton: {
+                  flex: 1,
+                  backgroundColor: '#475569',
+                },
+                nextButton: {
+                  flex: 1,
+                },
+                startButton: {
+                  flex: 1,
+                },
+
+                // 온보딩 미리보기 스타일
+                previewContainer: {
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginVertical: 20,
+                },
+                previewScreen: {
+                  width: 240,
+                  height: 300,
+                  backgroundColor: '#334155',
+                  borderRadius: 12,
+                  padding: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 5,
+                  elevation: 8,
+                },
+                previewTitle: {
+                  color: '#ffffff',
+                  fontSize: 14,
+                  fontWeight: 'bold',
+                  marginBottom: 12,
+                  textAlign: 'center',
+                },
+                previewInput: {
+                  backgroundColor: '#1e293b',
+                  borderRadius: 6,
+                  padding: 8,
+                  marginBottom: 8,
+                },
+                previewInputText: {
+                  color: '#94a3b8',
+                  fontSize: 12,
+                  textAlign: 'center',
+                },
+                previewTimer: {
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                },
+                previewTimerText: {
+                  color: '#8b5cf6',
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                  marginBottom: 16,
+                },
+                previewProgressBar: {
+                  width: '100%',
+                  height: 8,
+                  backgroundColor: '#1e293b',
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                },
+                previewProgress: {
+                  height: '100%',
+                  backgroundColor: '#8b5cf6',
+                },
+                previewStatsTitle: {
+                  color: '#ffffff',
+                  fontSize: 14,
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  marginBottom: 8,
+                },
+                previewStatsPercent: {
+                  color: '#22c55e',
+                  fontSize: 28,
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  marginBottom: 16,
+                },
+                previewChart: {
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-end',
+                  height: 80,
+                  paddingHorizontal: 4,
+                },
+                previewBarContainer: {
+                  flex: 1,
+                  marginHorizontal: 2,
+                  height: '100%',
+                  justifyContent: 'flex-end',
+                },
+                previewBar: {
+                  backgroundColor: '#22c55e',
+                  borderRadius: 2,
+                  width: '100%',
                 }
-             });
+            });

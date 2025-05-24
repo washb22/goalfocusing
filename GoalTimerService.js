@@ -136,7 +136,7 @@ class GoalTimerService {
         PushNotification.localNotification({
           channelId: 'goal-timer-persistent',
           id: 999,
-          title: nearestGoal.goal,
+          title: `${nearestGoal.goal} 완료까지`,  // 이 부분 수정
           message: timeDisplay,
           ongoing: true,
           autoCancel: false,
