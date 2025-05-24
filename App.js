@@ -25,7 +25,6 @@ import { LogBox } from 'react-native';
 import StatisticsScreen from './StatisticsScreen';
 import mobileAds, { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { Alert } from 'react-native';
-import { Image } from 'react-native';
 import dayjs from 'dayjs';
 let GoalTimerService = null;
 if (Platform.OS === 'android') {
@@ -33,15 +32,6 @@ if (Platform.OS === 'android') {
 }
 LogBox.ignoreAllLogs(false);
 console.log('🟢 App.js 진입됨');
-
-
-// 이미지 경로 설정
-const onboardingImages = {
-  goalInput: require('./assets/onboarding1.png'),
-  timer: require('./assets/onboarding2.png'),
-  statistics: require('./assets/onboarding3.png'),
-};
-
 
 
 
@@ -1715,16 +1705,50 @@ return (
     </Modal>
   );
 
-// 온보딩 화면 컴포넌트
+// App.js에서 OnboardingScreen 컴포넌트를 찾아서 다음으로 교체하세요:
+
 const OnboardingScreen = () => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const iconFloat = useRef(new Animated.Value(0)).current;
+
+  // 플로팅 애니메이션
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(iconFloat, {
+          toValue: -10,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(iconFloat, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  // 페이드인 애니메이션
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, [onboardingStep]);
+
   const handleNext = () => {
     if (onboardingStep < 3) {
+      fadeAnim.setValue(0);
       setOnboardingStep(onboardingStep + 1);
     }
   };
 
   const handlePrev = () => {
     if (onboardingStep > 1) {
+      fadeAnim.setValue(0);
       setOnboardingStep(onboardingStep - 1);
     }
   };
@@ -1735,48 +1759,63 @@ const OnboardingScreen = () => {
     setOnboardingStep(1);
   };
 
-  const getOnboardingContent = () => {
-    switch (onboardingStep) {
-      case 1:
-        return {
-          title: "목표는 작고, 결심은 단단하게",
-          content: "내가 끝낼 수 있는 작은 목표 하나씩.\n\n보상과 제약이 이 앱의 핵심입니다.\n\n제약이 없으면 사람은 움직이지 않습니다.",
-          preview: 'goalInput'
-        };
-      case 2:
-        return {
-          title: "시간은 갑니다",
-          content: "시간이 되면 솔직하게 선택하세요.\n\n완료 / 실패 / 제약실행",
-          preview: 'timer'
-        };
-      case 3:
-        return {
-          title: "'할 줄 아는 사람'이 되는 과정",
-          content: "내가 얼마나 해냈는지 숫자로 확인.\n\n실패에 대한 핑계는 없습니다 오로지 실행뿐.",
-          preview: 'statistics'
-        };
-      default:
-        return { title: "", content: "", preview: null };
+  const renderIcon = () => {
+    if (onboardingStep === 1) {
+      return (
+        <Animated.View style={[styles.mainIcon, { transform: [{ translateY: iconFloat }] }]}>
+          <View style={styles.targetIcon}>
+            <View style={styles.targetInner} />
+            <View style={styles.targetCenter} />
+          </View>
+          <Text style={styles.dartIcon}>🎯</Text>
+        </Animated.View>
+      );
+    } else if (onboardingStep === 2) {
+      return (
+        <Animated.View style={[styles.mainIcon, { transform: [{ translateY: iconFloat }] }]}>
+          <Text style={{ fontSize: 70 }}>⏱️</Text>
+        </Animated.View>
+      );
+    } else {
+      return (
+        <Animated.View style={[styles.mainIcon, { transform: [{ translateY: iconFloat }] }]}>
+          <Text style={{ fontSize: 70 }}>📊</Text>
+        </Animated.View>
+      );
     }
   };
 
-  const { title, content, preview } = getOnboardingContent();
+  const getContent = () => {
+    switch (onboardingStep) {
+      case 1:
+        return {
+          title: '작은 목표, 큰 변화',
+          subtitle: '제약 없는 목표는 이룰 수 없습니다.',
+          description: '달성 가능한 목표를 설정하고\n보상과 제약으로 목표를 달성하세요',
+        };
+      case 2:
+        return {
+          title: '시간은 갑니다',
+          subtitle: '내가 설정한 목표시간을\n실시간으로 체크하세요',
+          description: '시간이 되면 솔직하게 선택하세요\n완료 / 실패 / 제약실행',
+        };
+      case 3:
+        return {
+          title: "당신은 되는 사람입니다.",
+          subtitle: '내가 얼마나 해냈는지 확인하고 발전하세요',
+          description: '실패에 대한 핑계는 없습니다\n오로지 실행뿐',
+        };
+      default:
+        return {};
+    }
+  };
 
-  // renderPreview 함수를 여기에 정의
-const renderPreview = () => {
-  const imageSource = onboardingImages[preview];
-  if (!imageSource) return null;
-
-  return (
-    <View style={styles.previewContainer}>
-      <Image source={imageSource} style={styles.previewImage} />
-    </View>
-  );
-};
+  const content = getContent();
 
   return (
     <SafeAreaView style={styles.onboardingContainer}>
       <View style={styles.onboardingContent}>
+        {/* 진행 점 */}
         <View style={styles.stepIndicatorContainer}>
           {[1, 2, 3].map((step) => (
             <View
@@ -1789,17 +1828,126 @@ const renderPreview = () => {
           ))}
         </View>
 
-        <View style={styles.onboardingTextContainer}>
-          <Text style={styles.onboardingTitle}>{title}</Text>
-          <Text style={styles.onboardingText}>{content}</Text>
+        <Animated.View style={[styles.contentWrapper, { opacity: fadeAnim }]}>
+          {/* 아이콘 */}
+          {renderIcon()}
+
+          {/* 텍스트 */}
+          <View style={styles.textSection}>
+            <Text style={styles.onboardingTitle}>{content.title}</Text>
+            <Text style={styles.onboardingSubtitle}>{content.subtitle}</Text>
+            <Text style={styles.onboardingDescription}>{content.description}</Text>
+          </View>
+
+          {/* 카드 컨테이너 - 보라색 테두리 */}
+          <View style={styles.cardContainer}>
+            <View style={styles.innerCard}>
+              {onboardingStep === 1 && (
+                <>
+                  <Text style={styles.cardTitle}>오늘의 목표</Text>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>달성목표</Text>
+                    <View style={styles.inputField}>
+                      <Text style={styles.inputText}>수학공부 2시간</Text>
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>목표 날짜</Text>
+                    <View style={styles.inputField}>
+                      <Text style={styles.inputText}>2025-05-24</Text>
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>목표 시간</Text>
+                    <View style={styles.inputField}>
+                      <Text style={styles.inputText}>13:59</Text>
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>성공 보상</Text>
+                    <View style={styles.inputField}>
+                      <Text style={styles.inputText}>1시간 유튜브 시청</Text>
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>실패 제약</Text>
+                    <View style={styles.inputField}>
+                      <Text style={styles.inputText}>친구한테 10만원 입금</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+
+              {onboardingStep === 2 && (
+                <>
+                  <Text style={styles.cardTitle}>달성 목표</Text>
+                  <Text style={styles.goalTitle}>수학공부 2시간</Text>
+                  {/* 여기에 타이머 SVG 넣기 - 나중에 구현 */}
+                  <View style={styles.timerPlaceholder}>
+                    <Text style={styles.timerTime}>01:45:03</Text>
+                    <Text style={styles.timerText}>목표는 이루라고 있는 것</Text>
+                  </View>
+                  <View style={styles.timeInfo}>
+                    <View style={styles.timeBox}>
+                      <Text style={styles.timeLabel}>시작</Text>
+                      <Text style={styles.timeValue}>11:14</Text>
+                    </View>
+                    <View style={styles.timeBox}>
+                      <Text style={styles.timeLabel}>종료</Text>
+                      <Text style={styles.timeValue}>13:00</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+
+    {onboardingStep === 3 && (
+      <>
+        <Text style={styles.cardTitle}>기간 목표 성공률</Text>
+        <Text style={styles.statsPercentage}>44%</Text>
+        <Text style={styles.statsMessage}>
+          이도 저도 아닌 상태. 제약 걸 땐 끝까지 지켜야지.
+        </Text>
+
+        {/* 막대 그래프 추가 */}
+        <View style={styles.statsBarContainer}>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '60%' }]} />
+            <Text style={styles.barLabel}>일</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '45%' }]} />
+            <Text style={styles.barLabel}>월</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '70%' }]} />
+            <Text style={styles.barLabel}>화</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '20%' }]} />
+            <Text style={styles.barLabel}>수</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '50%' }]} />
+            <Text style={styles.barLabel}>목</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '35%' }]} />
+            <Text style={styles.barLabel}>금</Text>
+          </View>
+          <View style={styles.barWrapper}>
+            <View style={[styles.bar, { height: '80%' }]} />
+            <Text style={styles.barLabel}>토</Text>
+          </View>
         </View>
+      </>
+    )}
+            </View>
+          </View>
+        </Animated.View>
 
-        {/* 미리보기 화면 */}
-        {renderPreview()}
-
+        {/* 버튼 */}
         <View style={styles.onboardingButtonContainer}>
           <View style={styles.onboardingButtonRow}>
-            {/* 이전 버튼 - 첫 페이지가 아닐 때만 표시 */}
             {onboardingStep > 1 && (
               <TouchableOpacity
                 style={[styles.onboardingButton, styles.prevButton]}
@@ -1809,7 +1957,6 @@ const renderPreview = () => {
               </TouchableOpacity>
             )}
 
-            {/* 다음/시작하기 버튼 */}
             {onboardingStep < 3 ? (
               <TouchableOpacity
                 style={[styles.onboardingButton, styles.nextButton]}
@@ -1861,6 +2008,7 @@ const renderPreview = () => {
           ) : (
             <StatisticsScreen />
           )}
+
 
           {/* 하단 탭 내비게이션 (타이머 화면에서는 숨김) */}
           {currentScreen !== 3 && (
@@ -3025,24 +3173,21 @@ const renderPreview = () => {
                   alignItems: 'center',
                   marginBottom: 8,
                 },
-                // 온보딩 스타일
+                // 온보딩 스타일 추가
                 onboardingContainer: {
                   flex: 1,
                   backgroundColor: '#1e293b',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingHorizontal: 24,
                 },
                 onboardingContent: {
                   flex: 1,
-                  width: '100%',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingVertical: 20,
+                  paddingTop: 10,
+                  paddingHorizontal: 20,
+                  paddingBottom: 15,
                 },
                 stepIndicatorContainer: {
                   flexDirection: 'row',
-                  marginBottom: 40,
+                  justifyContent: 'center',
+                  marginBottom: 15,
                 },
                 stepIndicator: {
                   width: 8,
@@ -3055,153 +3200,232 @@ const renderPreview = () => {
                   backgroundColor: '#8b5cf6',
                   width: 24,
                 },
+                contentWrapper: {
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                mainIcon: {
+                  width: 80,
+                  height: 80,
+                  marginBottom: 20,
+                  position: 'relative',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                targetIcon: {
+                  width: 70,
+                  height: 70,
+                  backgroundColor: '#ec4899',
+                  borderRadius: 35,
+                  position: 'relative',
+                },
+                targetInner: {
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  width: 45,
+                  height: 45,
+                  backgroundColor: '#fbbf24',
+                  borderRadius: 22.5,
+                  marginTop: -22.5,
+                  marginLeft: -22.5,
+                },
+                targetCenter: {
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  width: 20,
+                  height: 20,
+                  backgroundColor: 'white',
+                  borderRadius: 10,
+                  marginTop: -10,
+                  marginLeft: -10,
+                },
+                dartIcon: {
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  fontSize: 35,
+                  transform: [{ rotate: '-45deg' }],
+                },
+                textSection: {
+                  alignItems: 'center',
+                  marginBottom: 20,
+                },
                 onboardingTitle: {
                   fontSize: 24,
-                  fontWeight: 'bold',
+                  fontWeight: '700',
                   color: '#ffffff',
-                  marginBottom: 16,
+                  marginBottom: 8,
                   textAlign: 'center',
                 },
-                onboardingText: {
+                onboardingSubtitle: {
                   fontSize: 16,
-                  color: '#cbd5e1',
+                  color: '#8b5cf6',
+                  fontWeight: '600',
+                  marginBottom: 10,
                   textAlign: 'center',
-                  lineHeight: 24,
-                  marginBottom: 24,
                 },
-                onboardingButtonContainer: {
-             marginTop: 'auto',  // 추가
-              marginBottom: 40,   // 추가
-              width: '100%',
-              paddingHorizontal: 24,  // 추가
-            },
-            onboardingTextContainer: {
-              alignItems: 'center',
-              marginVertical: 20,
-            },
-                onboardingButton: {
+                onboardingDescription: {
+                  fontSize: 14,
+                  color: '#94a3b8',
+                  textAlign: 'center',
+                  lineHeight: 18,
+                },
+                cardContainer: {
+                  width: '100%',
+                  maxWidth: 320,
+                  padding: 2,
+                  borderRadius: 22,
                   backgroundColor: '#8b5cf6',
-                  paddingVertical: 16,
-                  borderRadius: 8,
+                },
+                innerCard: {
+                  backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                  borderRadius: 20,
+                  padding: 20,
+                },
+                cardTitle: {
+                  color: '#cbd5e1',
+                  fontSize: 14,
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  marginBottom: 18,
+                },
+                inputGroup: {
+                  marginBottom: 10,
+                },
+                inputLabel: {
+                  color: '#94a3b8',
+                  fontSize: 11,
+                  marginBottom: 4,
+                  textAlign: 'center',
+                },
+                inputField: {
+                  backgroundColor: '#334155',
+                  borderRadius: 10,
+                  padding: 10,
                   alignItems: 'center',
                 },
-                onboardingButtonText: {
+                inputText: {
+                  color: '#64748b',
+                  fontSize: 13,
+                  textAlign: 'center',
+                },
+                goalTitle: {
                   color: '#ffffff',
                   fontSize: 18,
-                  fontWeight: 'bold',
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  marginBottom: 20,
+                },
+                timerPlaceholder: {
+                  alignItems: 'center',
+                  marginVertical: 30,
+                },
+                timerTime: {
+                  fontSize: 36,
+                  fontWeight: '700',
+                  color: '#8b5cf6',
+                  marginBottom: 6,
+                },
+                timerText: {
+                  fontSize: 13,
+                  color: '#94a3b8',
+                },
+                timeInfo: {
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  gap: 20,
+                },
+                timeBox: {
+                  flex: 1,
+                  backgroundColor: '#334155',
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                },
+                timeLabel: {
+                  color: '#94a3b8',
+                  fontSize: 12,
+                  marginBottom: 4,
+                },
+                timeValue: {
+                  color: '#ffffff',
+                  fontSize: 16,
+                  fontWeight: '600',
+                },
+                statsPercentage: {
+                  fontSize: 42,
+                  fontWeight: '800',
+                  color: '#22c55e',
+                  textAlign: 'center',
+                  marginBottom: 8,
+                },
+                statsMessage: {
+                  color: '#94a3b8',
+                  fontSize: 13,
+                  textAlign: 'center',
+                  marginBottom: 20,
+                },
+                statsPlaceholder: {
+                  height: 80,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                },
+                onboardingButtonContainer: {
+                  marginTop: 25,
                 },
                 onboardingButtonRow: {
                   flexDirection: 'row',
                   justifyContent: 'space-between',
-                  width: '100%',
                   gap: 12,
                 },
-                prevButton: {
+                onboardingButton: {
                   flex: 1,
+                  backgroundColor: '#8b5cf6',
+                  paddingVertical: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                },
+                prevButton: {
                   backgroundColor: '#475569',
                 },
                 nextButton: {
-                  flex: 1,
-                },
-                startButton: {
-                  flex: 1,
-                },
-
-                // 온보딩 미리보기 스타일
-                previewContainer: {
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginVertical: 20,
-                },
-                previewScreen: {
-                  width: 240,
-                  height: 300,
-                  backgroundColor: '#334155',
-                  borderRadius: 12,
-                  padding: 16,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 5,
-                  elevation: 8,
-                },
-                previewTitle: {
-                  color: '#ffffff',
-                  fontSize: 14,
-                  fontWeight: 'bold',
-                  marginBottom: 12,
-                  textAlign: 'center',
-                },
-                previewInput: {
-                  backgroundColor: '#1e293b',
-                  borderRadius: 6,
-                  padding: 8,
-                  marginBottom: 8,
-                },
-                previewInputText: {
-                  color: '#94a3b8',
-                  fontSize: 12,
-                  textAlign: 'center',
-                },
-                previewTimer: {
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                },
-                previewTimerText: {
-                  color: '#8b5cf6',
-                  fontSize: 24,
-                  fontWeight: 'bold',
-                  marginBottom: 16,
-                },
-                previewProgressBar: {
-                  width: '100%',
-                  height: 8,
-                  backgroundColor: '#1e293b',
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                },
-                previewProgress: {
-                  height: '100%',
                   backgroundColor: '#8b5cf6',
                 },
-                previewStatsTitle: {
+                startButton: {
+                  backgroundColor: '#8b5cf6',
+                },
+                onboardingButtonText: {
                   color: '#ffffff',
-                  fontSize: 14,
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                  marginBottom: 8,
+                  fontSize: 16,
+                  fontWeight: '600',
                 },
-                previewStatsPercent: {
-                  color: '#22c55e',
-                  fontSize: 28,
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                  marginBottom: 16,
-                },
-                previewChart: {
+                // 막대 그래프 스타일 추가
+                statsBarContainer: {
                   flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-end',
+                  justifyContent: 'space-around',
                   height: 80,
-                  paddingHorizontal: 4,
+                  alignItems: 'flex-end',
+                  marginTop: 20,
                 },
-                previewBarContainer: {
+                barWrapper: {
                   flex: 1,
-                  marginHorizontal: 2,
                   height: '100%',
+                  alignItems: 'center',
                   justifyContent: 'flex-end',
+                  marginHorizontal: 3,
                 },
-                previewBar: {
+                bar: {
+                  width: '80%',
                   backgroundColor: '#22c55e',
-                  borderRadius: 2,
-                  width: '100%',
+                  borderRadius: 4,
                 },
-previewImage: {
-  width: 240,
-  height: 400,
-  borderRadius: 12,
-  resizeMode: 'contain',
-}
+                barLabel: {
+                  color: '#64748b',
+                  fontSize: 11,
+                  marginTop: 4,
+                }
             });
