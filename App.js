@@ -128,31 +128,41 @@ useEffect(() => {
     });
 
     // ✅ 백그라운드에서 앱이 열린 경우와 포그라운드 알림 클릭을 통합 처리
-   const handleNotificationResponse = async (response) => {
+ const handleNotificationResponse = async (response) => {
+   // 🔍 디버깅 코드 추가
+   console.log('🔔 알림 클릭됨!');
+   console.log('🔔 전체 response:', JSON.stringify(response, null, 2));
 
-     // notification 안의 data에서 추출
-     const notificationData = response.notification?.request?.content?.data?.notification?.data || {};
-     const goalId = notificationData.goalId;
-     const isPersistent = notificationData.isPersistent;
+   const notificationData = response.notification?.request?.content?.data || {};
+   const goalId = notificationData.goalId;
+   const isPersistent = notificationData.isPersistent;
 
+   console.log('🔔 notificationData:', notificationData);
+   console.log('🔔 goalId:', goalId);
+   console.log('🔔 savedGoals.length:', savedGoals.length);
 
-     if (goalId) {
-       // savedGoals가 이미 로드되어 있는지 확인
-       let goals = savedGoals;
-       if (goals.length === 0) {
-         goals = await loadGoalsFromStorage();
-       }
-
-       const targetGoal = goals.find(goal => goal.id === goalId);
-
-       if (targetGoal) {
-         setSelectedGoalForTimer(targetGoal);
-         setCurrentScreen(3);
-       } else {
-         setCurrentScreen(1);
-       }
+   if (goalId) {
+     let goals = savedGoals;
+     if (goals.length === 0) {
+       goals = await loadGoalsFromStorage();
+       console.log('🔔 AsyncStorage에서 로드된 goals:', goals.length);
      }
-   };
+
+     const targetGoal = goals.find(goal => goal.id === goalId);
+     console.log('🔔 찾은 targetGoal:', targetGoal);
+
+     if (targetGoal) {
+       console.log('🔔 타이머 스크린으로 이동!');
+       setSelectedGoalForTimer(targetGoal);
+       setCurrentScreen(3);
+     } else {
+       console.log('🔔 목표를 찾을 수 없음, 달력으로 이동');
+       setCurrentScreen(1);
+     }
+   } else {
+     console.log('🔔 goalId가 없음');
+   }
+ };
         // 백그라운드에서 앱이 열린 경우
         const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
         if (lastNotificationResponse) {
