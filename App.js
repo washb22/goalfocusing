@@ -26,6 +26,7 @@ import StatisticsScreen from './StatisticsScreen';
 import mobileAds, { InterstitialAd, AdEventType, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import { Alert } from 'react-native';
 import dayjs from 'dayjs';
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 let GoalTimerService = null;
 if (Platform.OS === 'android') {
   GoalTimerService = require('./GoalTimerService').default;
@@ -384,40 +385,47 @@ useEffect(() => {
 
 
 
-// 앱 시작시 저장된 목표 데이터 불러오기 useEffect 수정
-useEffect(() => {
-  const initializeApp = async () => {
-    // 첫 실행 여부 체크
-    const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+  // 앱 시작 시 모든 초기화 작업을 통합하는 useEffect
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // 1. (iOS 전용) 광고 추적 권한 요청
+        if (Platform.OS === 'ios') {
+          const { status } = await requestTrackingPermissionsAsync();
+          if (status === 'granted') {
+            console.log('광고 추적 권한이 허용되었습니다.');
+          } else {
+            console.log('광고 추적 권한이 거부되었습니다.');
+          }
+        }
 
-    if (!hasSeenOnboarding) {
-      setShowOnboarding(true);
-    }
+        // 2. 구글 모바일 광고 초기화
+        await mobileAds().initialize();
+        console.log('Google Mobile Ads initialized.');
 
-    // 기존 목표 로드 로직
-    const savedGoalsData = await loadGoalsFromStorage();
-    if (savedGoalsData.length > 0) {
-      console.log('목표 데이터 로드 성공:', savedGoalsData.length, '개 항목');
-      setSavedGoals(savedGoalsData);
-    } else {
-      console.log('저장된 목표 없음, 샘플 데이터 사용');
-      createSampleGoals();
-    }
-  };
+        // 3. 온보딩 화면 표시 여부 확인
+        const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+        if (!hasSeenOnboarding) {
+          setShowOnboarding(true);
+        }
 
-  initializeApp();
-}, []);
+        // 4. 저장된 목표 데이터 불러오기
+        const savedGoalsData = await loadGoalsFromStorage();
+        if (savedGoalsData.length > 0) {
+          console.log('목표 데이터 로드 성공:', savedGoalsData.length, '개 항목');
+          setSavedGoals(savedGoalsData);
+        } else {
+          console.log('저장된 목표 없음, 샘플 데이터 생성');
+          createSampleGoals();
+        }
 
+      } catch (error) {
+        console.error("앱 초기화 중 오류 발생:", error);
+      }
+    };
 
-
-// ← 여기에 새로운 useEffect 추가
-useEffect(() => {
-  mobileAds()
-    .initialize()
-    .then(adapterStatuses => {
-      console.log('Google Mobile Ads initialized:', adapterStatuses);
-    });
-}, []);
+    initializeApp();
+  }, []); // 이 useEffect는 앱이 처음 마운트될 때 한 번만 실행됩니다.
 
 
 
@@ -459,21 +467,6 @@ useEffect(() => {
     }
   }, [savedGoals]);
 
-  // 앱 시작시 저장된 목표 데이터 불러오기
-  useEffect(() => {
-    const loadSavedGoals = async () => {
-      const savedGoalsData = await loadGoalsFromStorage();
-      if (savedGoalsData.length > 0) {
-        console.log('목표 데이터 로드 성공:', savedGoalsData.length, '개 항목');
-        setSavedGoals(savedGoalsData);
-      } else {
-        console.log('저장된 목표 없음, 샘플 데이터 사용');
-        createSampleGoals();
-      }
-    };
-
-    loadSavedGoals();
-  }, []);
 
 //통계탭 진입시 하루한번 전면광고
 const interstitialAdUnitId = __DEV__

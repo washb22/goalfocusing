@@ -26,6 +26,17 @@
         "SCHEDULE_EXACT_ALARM"
       ]
     },
+    "ios": {
+      "bundleIdentifier": "com.wkrgud.GoalFocusingApp",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "이 식별자는 맞춤 광고를 제공하는 데 사용됩니다.",
+        "SKAdNetworkItems": [
+          {
+            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
+          }
+        ]
+      }
+    },
     "plugins": [
       [
         "expo-build-properties",
@@ -41,10 +52,10 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-1261617740464551~6220658914",
-          "iosAppId": "ca-app-pub-3077862428685229~8707602326",
-          "userTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you."
+          "iosAppId": "ca-app-pub-3077862428685229~8707602326"
         }
-      ]
+      ],
+      "expo-tracking-transparency"
     ],
     "extra": {
       "eas": {
@@ -57,16 +68,6 @@
     },
     "androidStatusBar": {
       "translucent": true
-    },
-    "ios": {
-      "bundleIdentifier": "com.wkrgud.GoalFocusingApp",
-      "infoPlist": {
-        "SKAdNetworkItems": [
-          {
-            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
-          }
-        ]
-      }
     }
   }
 }
