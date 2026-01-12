@@ -38,6 +38,7 @@
       }
     },
     "plugins": [
+      "./plugins/withExcludeSupportLibrary",
       [
         "expo-build-properties",
         {
@@ -55,7 +56,36 @@
           "iosAppId": "ca-app-pub-3077862428685229~8707602326"
         }
       ],
-      "expo-tracking-transparency"
+      "expo-tracking-transparency",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "GoalWidget",
+              "label": "골포커싱",
+              "description": "오늘의 목표 현황을 확인하세요",
+              "minWidth": "250dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "GoalWidgetSmall",
+              "label": "골포커싱 미니",
+              "description": "목표 달성 현황 미니 위젯",
+              "minWidth": "150dp",
+              "minHeight": "60dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {

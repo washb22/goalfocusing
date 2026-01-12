@@ -2,4 +2,6 @@
   <string name="app_name">골포커싱</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">true</string>
+  <string name="widget_goalwidget_description" translatable="false">오늘의 목표 현황을 확인하세요</string>
+  <string name="widget_goalwidgetsmall_description" translatable="false">목표 달성 현황 미니 위젯</string>
 </resources>
