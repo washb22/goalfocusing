@@ -1,6 +1,7 @@
 // src/widgets/widget-task-handler.js
 // 위젯 업데이트 태스크 핸들러
 
+import React from 'react';  // ⭐ 이게 빠져있었음!
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoalWidget, GoalWidgetSmall } from './GoalWidget';
 
@@ -29,7 +30,10 @@ const getCurrentTimeString = () => {
 // 목표 데이터 불러오기
 const loadGoalData = async () => {
   try {
+    console.log('위젯: 데이터 로드 시작');
     const jsonValue = await AsyncStorage.getItem('savedGoals');
+    console.log('위젯: AsyncStorage 데이터:', jsonValue ? '있음' : '없음');
+    
     if (jsonValue !== null) {
       const allGoals = JSON.parse(jsonValue);
       const today = getTodayString();
@@ -37,6 +41,7 @@ const loadGoalData = async () => {
 
       // 오늘 목표만 필터링
       const todayGoals = allGoals.filter(goal => goal.date === today);
+      console.log('위젯: 오늘 목표 수:', todayGoals.length);
 
       // 완료/실패 카운트
       const completedCount = todayGoals.filter(g => g.status === 'completed').length;
@@ -65,7 +70,7 @@ const loadGoalData = async () => {
       nextGoal: null,
     };
   } catch (error) {
-    console.error('위젯 데이터 로드 실패:', error);
+    console.log('위젯 데이터 로드 실패:', error.message);
     return {
       todayGoals: [],
       completedCount: 0,
@@ -78,11 +83,14 @@ const loadGoalData = async () => {
 
 // 위젯 태스크 핸들러
 export async function widgetTaskHandler(props) {
+  console.log('위젯: 태스크 핸들러 실행됨', props);
+  
   const widgetInfo = props.widgetInfo;
   const Widget = widgetInfo.widgetName;
 
   // 목표 데이터 로드
   const data = await loadGoalData();
+  console.log('위젯: 로드된 데이터', data);
 
   switch (Widget) {
     case WIDGET_NAMES.GOAL_WIDGET:

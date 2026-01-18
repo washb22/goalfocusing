@@ -218,12 +218,23 @@ const AppContent = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // iOS 광고 추적 권한
+        // ⭐ iOS 광고 추적 권한 요청 (반드시 광고 초기화 전에!)
         if (Platform.OS === 'ios') {
-          await requestTrackingPermissionsAsync();
+          console.log('iOS 추적 권한 요청 시작...');
+          const { status } = await requestTrackingPermissionsAsync();
+          console.log('Tracking permission status:', status);
+          
+          // 권한 상태에 따른 처리
+          if (status === 'granted') {
+            console.log('✅ 추적 허용됨 - 맞춤 광고 제공');
+          } else if (status === 'denied') {
+            console.log('❌ 추적 거부됨 - 일반 광고 제공');
+          } else {
+            console.log('⏳ 추적 권한 미결정:', status);
+          }
         }
 
-        // 광고 초기화
+        // 권한 요청 완료 후 광고 초기화
         await mobileAds().initialize();
         console.log('Google Mobile Ads initialized.');
 

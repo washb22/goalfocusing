@@ -1,5 +1,5 @@
 // src/screens/GoalDetailScreen.js
-// 목표 상세 화면 (공유 기능 추가)
+// 목표 상세 화면 (공유 기능 포함 - 네이티브 모듈 불필요)
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
@@ -7,9 +7,7 @@ import { useGoals } from '../context/GoalContext';
 import { COLORS } from '../constants/colors';
 import { GOAL_STATUS, CONSTRAINT_STATUS } from '../constants/goalStatus';
 import { sortGoalsByTime, formatDateString } from '../utils/dateUtils';
-import ShareButton from '../components/ShareButton';
-import ShareModal from '../components/modals/ShareModal';
-import { SHARE_TYPE } from '../utils/shareUtils';
+import ShareModal, { SHARE_TYPE } from '../components/modals/ShareModal';
 
 const GoalDetailScreen = ({
   onOpenStatusModal,

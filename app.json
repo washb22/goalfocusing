@@ -2,7 +2,7 @@
   "expo": {
     "name": "골포커싱",
     "slug": "GoalFocusingApp",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -23,7 +23,8 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "WAKE_LOCK",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "com.google.android.gms.permission.AD_ID"
       ]
     },
     "ios": {
@@ -33,8 +34,12 @@
         "SKAdNetworkItems": [
           {
             "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
           }
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
