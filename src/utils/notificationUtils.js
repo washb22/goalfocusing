@@ -1,5 +1,5 @@
 // src/utils/notificationUtils.js
-// 푸시 알림 관련 유틸리티 함수
+// 푸시 알림 관련 유틸리티 함수 (Expo SDK 53 호환)
 
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -39,13 +39,13 @@ export const setupNotifications = async () => {
 };
 
 /**
- * 목표 알림 예약
+ * 목표 알림 예약 (Expo SDK 53 호환)
  */
 export const scheduleGoalNotification = async (goal) => {
   try {
     const [hour, minute] = goal.time.split(':').map(Number);
     const targetTime = new Date(goal.date);
-    targetTime.setHours(hour, minute, 0);
+    targetTime.setHours(hour, minute, 0, 0);
 
     // 현재 시간을 KST 기준으로 보정
     const now = new Date();
@@ -60,6 +60,7 @@ export const scheduleGoalNotification = async (goal) => {
           title: `👏 ${goal.goal}, 이제 결과를 선택할 시간이에요.`,
           body: '완료 처리 또는 제약 설정을 진행해주세요.',
           sound: true,
+          ...(Platform.OS === 'android' && { channelId: 'goal-timer-channel' }),
           data: {
             goalId: goal.id,
             goalTitle: goal.goal,
@@ -67,7 +68,11 @@ export const scheduleGoalNotification = async (goal) => {
             goalTime: goal.time,
           },
         },
-        trigger: new Date(targetTime.getTime()),
+        // Expo SDK 53: type 필드 필수
+        trigger: {
+          type: 'date',
+          date: targetTime,
+        },
       });
       console.log('✅ 푸시 예약됨:', targetTime.toLocaleString());
       return true;
@@ -82,7 +87,7 @@ export const scheduleGoalNotification = async (goal) => {
 };
 
 /**
- * 타이머 완료 알림
+ * 타이머 완료 알림 (즉시 발송)
  */
 export const sendTimerCompleteNotification = async (goalTitle) => {
   try {
@@ -91,6 +96,7 @@ export const sendTimerCompleteNotification = async (goalTitle) => {
         title: `👏 ${goalTitle}, 이제 결과를 선택할 시간이에요.`,
         body: '완료/실패 처리 또는 제약 설정을 진행해주세요.',
         sound: true,
+        ...(Platform.OS === 'android' && { channelId: 'goal-timer-channel' }),
       },
       trigger: null, // 즉시 발송
     });

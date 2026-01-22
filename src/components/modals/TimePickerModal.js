@@ -1,9 +1,11 @@
 // src/components/modals/TimePickerModal.js
-// 시간 선택 모달
+// 시간 선택 모달 - 스크롤 스냅 자동 선택 기능
 
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
 import { COLORS } from '../../constants/colors';
+
+const ITEM_HEIGHT = 40;
 
 const TimePickerModal = ({ 
   visible, 
@@ -31,19 +33,65 @@ const TimePickerModal = ({
       setTimeout(() => {
         if (hourScrollViewRef.current) {
           hourScrollViewRef.current.scrollTo({
-            y: (selectedHour - 1) * 40,
+            y: (selectedHour - 1) * ITEM_HEIGHT,
             animated: false
           });
         }
         if (minuteScrollViewRef.current) {
           minuteScrollViewRef.current.scrollTo({
-            y: selectedMinute * 40,
+            y: selectedMinute * ITEM_HEIGHT,
             animated: false
           });
         }
       }, 100);
     }
   }, [visible]);
+
+  // 스크롤 끝났을 때 시간 선택 처리
+  const handleHourScrollEnd = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    const newHour = hours[Math.min(Math.max(index, 0), hours.length - 1)];
+    setSelectedHour(newHour);
+    
+    // 정확한 위치로 스냅
+    hourScrollViewRef.current?.scrollTo({
+      y: index * ITEM_HEIGHT,
+      animated: true
+    });
+  };
+
+  // 스크롤 끝났을 때 분 선택 처리
+  const handleMinuteScrollEnd = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    const newMinute = minutes[Math.min(Math.max(index, 0), minutes.length - 1)];
+    setSelectedMinute(newMinute);
+    
+    // 정확한 위치로 스냅
+    minuteScrollViewRef.current?.scrollTo({
+      y: index * ITEM_HEIGHT,
+      animated: true
+    });
+  };
+
+  // 시간 클릭 시 해당 위치로 스크롤
+  const handleHourPress = (hour, index) => {
+    setSelectedHour(hour);
+    hourScrollViewRef.current?.scrollTo({
+      y: index * ITEM_HEIGHT,
+      animated: true
+    });
+  };
+
+  // 분 클릭 시 해당 위치로 스크롤
+  const handleMinutePress = (minute, index) => {
+    setSelectedMinute(minute);
+    minuteScrollViewRef.current?.scrollTo({
+      y: index * ITEM_HEIGHT,
+      animated: true
+    });
+  };
 
   const handleConfirm = () => {
     let hour = selectedHour;
@@ -66,60 +114,76 @@ const TimePickerModal = ({
           <View style={styles.pickerContainer}>
             {/* 시간 스크롤 */}
             <View style={styles.wheelContainer}>
-              <ScrollView
-                ref={hourScrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={40}
-                decelerationRate="fast"
-              >
-                {hours.map((hour) => (
-                  <TouchableOpacity
-                    key={hour}
-                    style={styles.item}
-                    onPress={() => setSelectedHour(hour)}
-                  >
-                    <Text
-                      style={[
-                        styles.itemText,
-                        selectedHour === hour ? styles.selectedItemText : {}
-                      ]}
+              <View style={styles.scrollWrapper}>
+                <ScrollView
+                  ref={hourScrollViewRef}
+                  style={styles.scrollView}
+                  contentContainerStyle={styles.scrollContent}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  onMomentumScrollEnd={handleHourScrollEnd}
+                  onScrollEndDrag={handleHourScrollEnd}
+                  nestedScrollEnabled={true}
+                >
+                  {hours.map((hour, index) => (
+                    <TouchableOpacity
+                      key={hour}
+                      style={styles.item}
+                      onPress={() => handleHourPress(hour, index)}
+                      activeOpacity={0.7}
                     >
-                      {String(hour).padStart(2, '0')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                      <Text
+                        style={[
+                          styles.itemText,
+                          selectedHour === hour ? styles.selectedItemText : {}
+                        ]}
+                      >
+                        {String(hour).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {/* 선택 영역 표시 */}
+                <View style={styles.selectionIndicator} pointerEvents="none" />
+              </View>
 
               <Text style={styles.separator}>:</Text>
 
               {/* 분 스크롤 */}
-              <ScrollView
-                ref={minuteScrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={40}
-                decelerationRate="fast"
-              >
-                {minutes.map((minute) => (
-                  <TouchableOpacity
-                    key={minute}
-                    style={styles.item}
-                    onPress={() => setSelectedMinute(minute)}
-                  >
-                    <Text
-                      style={[
-                        styles.itemText,
-                        selectedMinute === minute ? styles.selectedItemText : {}
-                      ]}
+              <View style={styles.scrollWrapper}>
+                <ScrollView
+                  ref={minuteScrollViewRef}
+                  style={styles.scrollView}
+                  contentContainerStyle={styles.scrollContent}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  onMomentumScrollEnd={handleMinuteScrollEnd}
+                  onScrollEndDrag={handleMinuteScrollEnd}
+                  nestedScrollEnabled={true}
+                >
+                  {minutes.map((minute, index) => (
+                    <TouchableOpacity
+                      key={minute}
+                      style={styles.item}
+                      onPress={() => handleMinutePress(minute, index)}
+                      activeOpacity={0.7}
                     >
-                      {String(minute).padStart(2, '0')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                      <Text
+                        style={[
+                          styles.itemText,
+                          selectedMinute === minute ? styles.selectedItemText : {}
+                        ]}
+                      >
+                        {String(minute).padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {/* 선택 영역 표시 */}
+                <View style={styles.selectionIndicator} pointerEvents="none" />
+              </View>
             </View>
 
             {/* AM/PM 선택 */}
@@ -158,9 +222,6 @@ const TimePickerModal = ({
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* 선택 표시 오버레이 */}
-          <View style={styles.selectionOverlay} pointerEvents="none" />
 
           {/* 버튼 */}
           <View style={styles.footer}>
@@ -211,6 +272,11 @@ const styles = StyleSheet.create({
     height: 200,
     alignItems: 'center',
   },
+  scrollWrapper: {
+    position: 'relative',
+    height: 200,
+    width: 60,
+  },
   scrollView: {
     width: 60,
     height: 200,
@@ -220,7 +286,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   item: {
-    height: 40,
+    height: ITEM_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     width: 60,
@@ -232,6 +298,17 @@ const styles = StyleSheet.create({
   selectedItemText: {
     color: COLORS.textPrimary,
     fontWeight: 'bold',
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    top: 80,
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: 'transparent',
   },
   separator: {
     fontSize: 30,
@@ -262,18 +339,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontWeight: 'bold',
   },
-  selectionOverlay: {
-    position: 'absolute',
-    top: '50%',
-    left: 20,
-    right: 100,
-    height: 40,
-    marginTop: -20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.primaryDark,
-    backgroundColor: 'rgba(76, 29, 149, 0.1)',
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -284,8 +349,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginHorizontal: 4,
     backgroundColor: COLORS.card,
+    marginHorizontal: 4,
   },
   confirmButton: {
     backgroundColor: COLORS.primaryDark,
@@ -293,6 +358,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.textPrimary,
     fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

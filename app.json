@@ -5,6 +5,11 @@
     "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "goalfocusing",
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#8b5cf6"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -25,6 +30,18 @@
         "WAKE_LOCK",
         "SCHEDULE_EXACT_ALARM",
         "com.google.android.gms.permission.AD_ID"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "goalfocusing"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "ios": {

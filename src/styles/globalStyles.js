@@ -63,6 +63,7 @@ export const globalStyles = StyleSheet.create({
   buttonContainer: {
     marginTop: 24,
     alignItems: 'center',
+    marginBottom: 80,  // ✅ 하단 여백 추가
   },
   button: {
     backgroundColor: COLORS.primaryDark,

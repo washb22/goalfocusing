@@ -5,7 +5,6 @@ import React from 'react';
 import {
   FlexWidget,
   TextWidget,
-  ImageWidget,
 } from 'react-native-android-widget';
 
 // 위젯 사이즈별 컴포넌트
@@ -26,6 +25,8 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
         borderRadius: 16,
         padding: 16,
       }}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: 'goalfocusing://today' }}
     >
       {/* 헤더 */}
       <FlexWidget
@@ -118,35 +119,17 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
       {/* 달성률 바 */}
       <FlexWidget
         style={{
-          flexDirection: 'column',
           marginBottom: 12,
         }}
       >
-        <FlexWidget
+        <TextWidget
+          text={`달성률${achievementRate}%`}
           style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
+            fontSize: 12,
+            color: '#94a3b8',
             marginBottom: 4,
           }}
-        >
-          <TextWidget
-            text="달성률"
-            style={{
-              fontSize: 12,
-              color: '#94a3b8',
-            }}
-          />
-          <TextWidget
-            text={`${achievementRate}%`}
-            style={{
-              fontSize: 12,
-              fontWeight: 'bold',
-              color: '#22c55e',
-            }}
-          />
-        </FlexWidget>
-        
-        {/* 프로그레스 바 배경 */}
+        />
         <FlexWidget
           style={{
             height: 8,
@@ -155,7 +138,6 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
             width: 'match_parent',
           }}
         >
-          {/* 프로그레스 바 채움 */}
           <FlexWidget
             style={{
               height: 8,
@@ -177,9 +159,9 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
           }}
         >
           <TextWidget
-            text="⏰ 다음 목표"
+            text="🎯 다음 목표"
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: '#94a3b8',
               marginBottom: 4,
             }}
@@ -191,15 +173,8 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
               fontWeight: 'bold',
               color: '#ffffff',
             }}
+            truncate="END"
             maxLines={1}
-          />
-          <TextWidget
-            text={nextGoal.time}
-            style={{
-              fontSize: 12,
-              color: '#8b5cf6',
-              marginTop: 2,
-            }}
           />
         </FlexWidget>
       ) : (
@@ -241,7 +216,8 @@ export function GoalWidgetSmall({ completedCount = 0, totalCount = 0 }) {
         borderRadius: 16,
         padding: 12,
       }}
-      clickAction="OPEN_APP"
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: 'goalfocusing://today' }}
     >
       <TextWidget
         text="🎯 골포커싱"

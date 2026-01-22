@@ -93,7 +93,7 @@ const GoalDetailScreen = ({
         <TouchableOpacity onPress={navigateToCalendarView} style={styles.backButton}>
           <Text style={styles.backButtonText}>← 달력</Text>
         </TouchableOpacity>
-        <Text style={styles.dateTitle}>{formatDateString(selectedCalendarDate)}</Text>
+        <Text style={styles.dateTitle}>{selectedCalendarDate}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -107,7 +107,7 @@ const GoalDetailScreen = ({
           sortedGoals.map((goal) => (
             <View 
               key={goal.id} 
-              style={[styles.goalCard, { borderLeftColor: getStatusColor(goal.status) }]}
+              style={styles.goalCard}
             >
               {/* 목표 정보 */}
               <View style={styles.goalInfo}>
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    borderLeftWidth: 4,
+    // borderLeftWidth 삭제 - 왼쪽 검정 공간 문제 해결
   },
   goalInfo: {
     marginBottom: 12,
@@ -274,13 +274,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rewardText: {
-    color: COLORS.statusSuccess,
     fontSize: 13,
-    marginBottom: 2,
+    color: '#ffffff',
+    marginTop: 4,
   },
   penaltyText: {
-    color: COLORS.statusFailed,
     fontSize: 13,
+    color: '#ffffff',
+    marginTop: 2,
   },
   statusContainer: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-// TimerScreen.js - 개선된 UI 버전
+// TimerScreen.js - 개선된 UI 버전 (Expo SDK 53 호환)
 
 import React, { useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
@@ -208,23 +208,24 @@ const calculateTimeRemaining = () => {
     } else {
       if (BackgroundTimer && timerRef.current) BackgroundTimer.clearInterval(timerRef.current);
       if (Vibration) Vibration.vibrate([500, 200, 500]);
-   await Notifications.scheduleNotificationAsync({
-     content: {
-       title: `👏 ${goal.goal}, 이제 결과를 선택할 시간이에요.`,
-       body: '완료/실패 처리 또는 제약 설정을 진행해주세요.',
-       sound: true,
-     },
-     trigger: {
-       seconds: 1, // 즉시 발송 (null 대신 사용 → 백그라운드에서 작동 보장)
-       channelId: 'goal-timer-channel', // Android 채널 ID 필수
-     },
-   });
-    Alert.alert('타이머 완료', `'${goal.goal}' 목표 시간에 도달했습니다!`, [
-      { text: '완료로 표시', onPress: () => onComplete && onComplete(goal.id, 'completed') },
-      { text: '실패로 표시', onPress: () => onComplete && onComplete(goal.id, 'failed') },       // ✅ 추가
-      { text: '제약 설정', onPress: () => onComplete && onComplete(goal.id, 'constrained') },
-      { text: '닫기', style: 'cancel' }
-    ]);
+      
+      // Expo SDK 53 호환: trigger: null로 즉시 발송
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `👏 ${goal.goal}, 이제 결과를 선택할 시간이에요.`,
+          body: '완료/실패 처리 또는 제약 설정을 진행해주세요.',
+          sound: true,
+          ...(Platform.OS === 'android' && { channelId: 'goal-timer-channel' }),
+        },
+        trigger: null, // 즉시 발송 (Expo SDK 53 호환)
+      });
+      
+      Alert.alert('타이머 완료', `'${goal.goal}' 목표 시간에 도달했습니다!`, [
+        { text: '완료로 표시', onPress: () => onComplete && onComplete(goal.id, 'completed') },
+        { text: '실패로 표시', onPress: () => onComplete && onComplete(goal.id, 'failed') },
+        { text: '제약 설정', onPress: () => onComplete && onComplete(goal.id, 'constrained') },
+        { text: '닫기', style: 'cancel' }
+      ]);
     }
   };
 
@@ -268,42 +269,32 @@ useEffect(() => {
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  // 퍼센티지 계산 (타이머가 완료되면 항상 100% 반환)
-  const getPercentComplete = () => {
-    // 타이머가 완료된 상태면 항상 100% 반환
-    if (isCompletedRef.current || remainingTime === 0) return 100;
+  // 퍼센트 계산 (0-100)
+  const percent = Math.min(
+    100,
+    Math.max(0, Math.round((1 - remainingTime / Math.max(initialTimeRef.current, 1)) * 100))
+  );
 
-    // 정상적인 진행률 계산
-    if (initialTimeRef.current <= 0) return 0;
-    const rawPercent = (1 - remainingTime / initialTimeRef.current) * 100;
-    const validPercent = Math.max(0, Math.min(100, rawPercent));
-    return Math.floor(validPercent);
-  };
+  // 시작 시간과 종료 시간
+  const startTime = goal?.createdAt || '--:--';
+  const endTime = goal?.time || '--:--';
 
-  const percent = getPercentComplete();
-  const { hours, minutes } = (() => {
-    const h = Math.floor(remainingTime / 3600);
-    const m = Math.floor((remainingTime % 3600) / 60);
-    return { hours: h, minutes: m };
-  })();
-
-  const startTime = goal?.createdAt || '시작시간 없음';
-  const endTime = goal?.time || '종료시간 없음';
-
+  // 타이머 크기에 맞춘 위치 계산
   const cx = timerSize / 2;
   const cy = timerSize / 2;
 
-  // 퍼센트 위치 계산 (원 둘레를 따라)
+  // 퍼센트 버블 위치 계산
   const getPercentPosition = () => {
-    // 유효한 각도 계산 (NaN 방지)
-    const percentValue = percent / 100;
-    const validPercent = isNaN(percentValue) ? 0 : percentValue;
+    // 현재 진행률 (0~1)
+    const currentProgress = 1 - remainingTime / Math.max(initialTimeRef.current, 1);
+    const clampedProgress = Math.max(0, Math.min(1, currentProgress));
 
-    // 정확한 각도 계산 (-90도에서 시작)
-    const angle = 2 * Math.PI * validPercent - Math.PI/2;
+    // 각도 계산 (시계 반대방향, 12시 방향에서 시작)
+    // -90도(12시)에서 시작하여 진행률에 따라 회전
+    const angle = (-90 + clampedProgress * 360) * (Math.PI / 180);
 
     // 위치 계산
     return {
@@ -567,7 +558,7 @@ goalName: {
     color: '#999', // 색상 밝게
     textAlign: 'center',
     marginTop: normalize(5),
-    marginBottom: normalize(15),
+    marginBottom: normalize(60), // 네비게이션 바 여백
     lineHeight: normalize(18),
     fontWeight: '400', // 보통 굵기
   }
