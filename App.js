@@ -220,6 +220,7 @@ const AppContent = () => {
       try {
         // ⭐ iOS 광고 추적 권한 요청 (반드시 광고 초기화 전에!)
         if (Platform.OS === 'ios') {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // ⬅️ 이 줄 추가!
           console.log('iOS 추적 권한 요청 시작...');
           const { status } = await requestTrackingPermissionsAsync();
           console.log('Tracking permission status:', status);

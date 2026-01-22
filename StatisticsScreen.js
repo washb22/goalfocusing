@@ -262,9 +262,7 @@ const interstitialAdUnitId = __DEV__
   ? TestIds.INTERSTITIAL
   : 'ca-app-pub-3077862428685229/9380705536'; // 실제 광고 ID
 
-const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
-  requestNonPersonalizedAdsOnly: true,
-});
+const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId);
 
 const showAdOncePerDay = async () => {
   const today = dayjs().format('YYYY-MM-DD');
@@ -495,10 +493,7 @@ const showAdOncePerDay = async () => {
        <View style={styles.standardBannerContainer}>
          <BannerAd
            unitId={adUnitId}
-           size={BannerAdSize.ADAPTIVE_BANNER} // BANNER → ADAPTIVE_BANNER로 변경
-           requestOptions={{
-             requestNonPersonalizedAdsOnly: true,
-           }}
+           size={BannerAdSize.ADAPTIVE_BANNER}
            onAdFailedToLoad={(error) => {
              console.log('광고 로드 실패:', error);
              setAdError(true);

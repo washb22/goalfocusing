@@ -2,7 +2,7 @@
   "expo": {
     "name": "골포커싱",
     "slug": "GoalFocusingApp",
-    "version": "1.0.3",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -18,7 +18,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "com.wkrgud.GoalFocusingApp",
+      "package": "com.washb.GoalFocusingApp",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
@@ -29,6 +29,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.wkrgud.GoalFocusingApp",
+      "supportsTablet": false,
       "infoPlist": {
         "NSUserTrackingUsageDescription": "이 식별자는 맞춤 광고를 제공하는 데 사용됩니다.",
         "SKAdNetworkItems": [
@@ -48,9 +49,11 @@
         "expo-build-properties",
         {
           "android": {
+            "androidGradlePluginVersion": "8.6.0",
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0"
+            "buildToolsVersion": "35.0.0",
+            "ndkVersion": "27.1.12297006"
           }
         }
       ],
@@ -90,7 +93,8 @@
             }
           ]
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
