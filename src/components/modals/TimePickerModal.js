@@ -1,5 +1,5 @@
 // src/components/modals/TimePickerModal.js
-// 시간 선택 모달 - 스크롤 스냅 자동 선택 기능
+// 시간 선택 모달 - 스크롤 멈춤 버그 수정
 
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
@@ -18,6 +18,7 @@ const TimePickerModal = ({
   const [selectedHour, setSelectedHour] = useState(initialHour);
   const [selectedMinute, setSelectedMinute] = useState(initialMinute);
   const [selectedPeriod, setSelectedPeriod] = useState(initialPeriod);
+  const [isScrolling, setIsScrolling] = useState(false);
 
   const hourScrollViewRef = useRef(null);
   const minuteScrollViewRef = useRef(null);
@@ -27,52 +28,120 @@ const TimePickerModal = ({
   // 분 배열 (0-59)
   const minutes = Array.from({ length: 60 }, (_, i) => i);
 
+  // 모달이 열릴 때마다 상태 초기화
   useEffect(() => {
     if (visible) {
+      setSelectedHour(initialHour);
+      setSelectedMinute(initialMinute);
+      setSelectedPeriod(initialPeriod);
+      setIsScrolling(false);
+      
       // 초기 스크롤 위치 설정
       setTimeout(() => {
         if (hourScrollViewRef.current) {
           hourScrollViewRef.current.scrollTo({
-            y: (selectedHour - 1) * ITEM_HEIGHT,
+            y: (initialHour - 1) * ITEM_HEIGHT,
             animated: false
           });
         }
         if (minuteScrollViewRef.current) {
           minuteScrollViewRef.current.scrollTo({
-            y: selectedMinute * ITEM_HEIGHT,
+            y: initialMinute * ITEM_HEIGHT,
             animated: false
           });
         }
-      }, 100);
+      }, 150);
     }
-  }, [visible]);
+  }, [visible, initialHour, initialMinute, initialPeriod]);
 
-  // 스크롤 끝났을 때 시간 선택 처리
-  const handleHourScrollEnd = (event) => {
+  // 스크롤 중 시간 값 업데이트 (스냅 없이)
+  const handleHourScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const index = Math.round(offsetY / ITEM_HEIGHT);
-    const newHour = hours[Math.min(Math.max(index, 0), hours.length - 1)];
-    setSelectedHour(newHour);
+    const clampedIndex = Math.min(Math.max(index, 0), hours.length - 1);
+    const newHour = hours[clampedIndex];
+    if (newHour !== selectedHour) {
+      setSelectedHour(newHour);
+    }
+  };
+
+  // 스크롤 중 분 값 업데이트 (스냅 없이)
+  const handleMinuteScroll = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    const clampedIndex = Math.min(Math.max(index, 0), minutes.length - 1);
+    const newMinute = minutes[clampedIndex];
+    if (newMinute !== selectedMinute) {
+      setSelectedMinute(newMinute);
+    }
+  };
+
+  // 스크롤 완전히 멈춘 후 스냅 (MomentumScrollEnd에서만)
+  const handleHourMomentumEnd = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    const clampedIndex = Math.min(Math.max(index, 0), hours.length - 1);
     
     // 정확한 위치로 스냅
     hourScrollViewRef.current?.scrollTo({
-      y: index * ITEM_HEIGHT,
+      y: clampedIndex * ITEM_HEIGHT,
       animated: true
     });
+    
+    setSelectedHour(hours[clampedIndex]);
   };
 
-  // 스크롤 끝났을 때 분 선택 처리
-  const handleMinuteScrollEnd = (event) => {
+  // 스크롤 완전히 멈춘 후 스냅
+  const handleMinuteMomentumEnd = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const index = Math.round(offsetY / ITEM_HEIGHT);
-    const newMinute = minutes[Math.min(Math.max(index, 0), minutes.length - 1)];
-    setSelectedMinute(newMinute);
+    const clampedIndex = Math.min(Math.max(index, 0), minutes.length - 1);
     
     // 정확한 위치로 스냅
     minuteScrollViewRef.current?.scrollTo({
-      y: index * ITEM_HEIGHT,
+      y: clampedIndex * ITEM_HEIGHT,
       animated: true
     });
+    
+    setSelectedMinute(minutes[clampedIndex]);
+  };
+
+  // 드래그 끝날 때 (모멘텀 없이 멈춘 경우)
+  const handleHourScrollEndDrag = (event) => {
+    // 모멘텀이 없으면 직접 스냅
+    const velocity = event.nativeEvent.velocity?.y || 0;
+    if (Math.abs(velocity) < 0.1) {
+      setTimeout(() => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const index = Math.round(offsetY / ITEM_HEIGHT);
+        const clampedIndex = Math.min(Math.max(index, 0), hours.length - 1);
+        
+        hourScrollViewRef.current?.scrollTo({
+          y: clampedIndex * ITEM_HEIGHT,
+          animated: true
+        });
+        
+        setSelectedHour(hours[clampedIndex]);
+      }, 50);
+    }
+  };
+
+  const handleMinuteScrollEndDrag = (event) => {
+    const velocity = event.nativeEvent.velocity?.y || 0;
+    if (Math.abs(velocity) < 0.1) {
+      setTimeout(() => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const index = Math.round(offsetY / ITEM_HEIGHT);
+        const clampedIndex = Math.min(Math.max(index, 0), minutes.length - 1);
+        
+        minuteScrollViewRef.current?.scrollTo({
+          y: clampedIndex * ITEM_HEIGHT,
+          animated: true
+        });
+        
+        setSelectedMinute(minutes[clampedIndex]);
+      }, 50);
+    }
   };
 
   // 시간 클릭 시 해당 위치로 스크롤
@@ -122,9 +191,13 @@ const TimePickerModal = ({
                   showsVerticalScrollIndicator={false}
                   snapToInterval={ITEM_HEIGHT}
                   decelerationRate="fast"
-                  onMomentumScrollEnd={handleHourScrollEnd}
-                  onScrollEndDrag={handleHourScrollEnd}
+                  onScroll={handleHourScroll}
+                  onMomentumScrollEnd={handleHourMomentumEnd}
+                  onScrollEndDrag={handleHourScrollEndDrag}
+                  scrollEventThrottle={16}
                   nestedScrollEnabled={true}
+                  bounces={false}
+                  overScrollMode="never"
                 >
                   {hours.map((hour, index) => (
                     <TouchableOpacity
@@ -159,9 +232,13 @@ const TimePickerModal = ({
                   showsVerticalScrollIndicator={false}
                   snapToInterval={ITEM_HEIGHT}
                   decelerationRate="fast"
-                  onMomentumScrollEnd={handleMinuteScrollEnd}
-                  onScrollEndDrag={handleMinuteScrollEnd}
+                  onScroll={handleMinuteScroll}
+                  onMomentumScrollEnd={handleMinuteMomentumEnd}
+                  onScrollEndDrag={handleMinuteScrollEndDrag}
+                  scrollEventThrottle={16}
                   nestedScrollEnabled={true}
+                  bounces={false}
+                  overScrollMode="never"
                 >
                   {minutes.map((minute, index) => (
                     <TouchableOpacity
@@ -276,6 +353,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     height: 200,
     width: 60,
+    overflow: 'hidden',
   },
   scrollView: {
     width: 60,

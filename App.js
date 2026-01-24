@@ -6,12 +6,12 @@ import {
   StyleSheet,
   View,
   StatusBar,
-  SafeAreaView,
   Platform,
   BackHandler,
   Alert,
   LogBox,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import mobileAds from 'react-native-google-mobile-ads';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 
@@ -311,7 +311,7 @@ const AppContent = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
       {renderScreen()}
@@ -461,9 +461,11 @@ const AppContent = () => {
 // 메인 App 컴포넌트
 export default function App() {
   return (
-    <GoalProvider>
-      <AppContent />
-    </GoalProvider>
+    <SafeAreaProvider>
+      <GoalProvider>
+        <AppContent />
+      </GoalProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -471,6 +473,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
 });

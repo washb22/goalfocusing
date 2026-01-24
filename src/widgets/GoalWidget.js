@@ -25,8 +25,7 @@ export function GoalWidget({ todayGoals = [], completedCount = 0, failedCount = 
         borderRadius: 16,
         padding: 16,
       }}
-      clickAction="OPEN_URI"
-      clickActionData={{ uri: 'goalfocusing://today' }}
+      clickAction="OPEN_APP"
     >
       {/* 헤더 */}
       <FlexWidget
@@ -216,8 +215,7 @@ export function GoalWidgetSmall({ completedCount = 0, totalCount = 0 }) {
         borderRadius: 16,
         padding: 12,
       }}
-      clickAction="OPEN_URI"
-      clickActionData={{ uri: 'goalfocusing://today' }}
+      clickAction="OPEN_APP"
     >
       <TextWidget
         text="🎯 골포커싱"

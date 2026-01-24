@@ -11,7 +11,7 @@ import {
   checkStoredGoals 
 } from '../utils/storageUtils';
 import { scheduleGoalNotification } from '../utils/notificationUtils';
-import { getCurrentTimeString, getTodayString } from '../utils/dateUtils';
+import { getCurrentTimeString, getTodayString, formatDateString } from '../utils/dateUtils';
 import { updateAllWidgets } from '../utils/widgetUtils';
 
 const GoalContext = createContext();
@@ -102,167 +102,97 @@ export const GoalProvider = ({ children }) => {
     setEditGoalId(null);
 
     Alert.alert('성공', '목표가 성공적으로 저장되었습니다!');
-    checkStoredGoals();
-    
     return true;
   }, [goal, goalDate, goalTime, reward, penalty, savedGoals, triggerWidgetUpdate]);
 
   // 목표 수정
-  const updateGoal = useCallback(async () => {
-    if (!editGoalData.goal || !editGoalData.date || !editGoalData.time) {
-      Alert.alert('알림', '목표, 날짜, 시간은 필수 입력 항목입니다.');
-      return false;
-    }
-
-    const updatedGoals = savedGoals.map(g => {
-      if (g.id === editGoalId) {
-        return {
-          ...g,
-          goal: editGoalData.goal,
-          date: editGoalData.date,
-          time: editGoalData.time,
-          reward: editGoalData.reward,
-          penalty: editGoalData.penalty,
-        };
-      }
-      return g;
-    });
-
+  const updateGoal = useCallback(async (goalId, updatedData) => {
+    const updatedGoals = savedGoals.map(g => 
+      g.id === goalId ? { ...g, ...updatedData } : g
+    );
     setSavedGoals(updatedGoals);
     await saveGoalsToStorage(updatedGoals);
-
-    // 위젯 업데이트
     await triggerWidgetUpdate();
-
-    // 선택된 날짜 목표 업데이트
-    if (selectedCalendarDate) {
-      const updatedDateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
-      setSelectedDateGoals(updatedDateGoals);
-    }
-
-    setEditGoalModal(false);
-    setEditGoalId(null);
-    Alert.alert('성공', '목표가 수정되었습니다!');
     
-    return true;
-  }, [editGoalId, editGoalData, savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
+    // 선택된 날짜의 목표 목록도 업데이트
+    if (selectedCalendarDate) {
+      const dateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
+      setSelectedDateGoals(dateGoals);
+    }
+  }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
   // 목표 삭제
   const deleteGoal = useCallback(async (goalId) => {
     const updatedGoals = savedGoals.filter(g => g.id !== goalId);
     setSavedGoals(updatedGoals);
     await saveGoalsToStorage(updatedGoals);
-
-    // 위젯 업데이트
     await triggerWidgetUpdate();
-
+    
+    // 선택된 날짜의 목표 목록도 업데이트
     if (selectedCalendarDate) {
-      const updatedDateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
-      setSelectedDateGoals(updatedDateGoals);
-
-      if (updatedDateGoals.length === 0) {
-        setCurrentScreen(SCREENS.GOAL_CALENDAR);
-      }
+      const dateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
+      setSelectedDateGoals(dateGoals);
     }
   }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
-  // 목표 상태 변경
+  // 목표 상태 업데이트
   const updateGoalStatus = useCallback(async (goalId, newStatus) => {
-    const updatedGoals = savedGoals.map(g => {
-      if (g.id === goalId) {
-        return { ...g, status: newStatus };
-      }
-      return g;
-    });
-
+    const updatedGoals = savedGoals.map(g => 
+      g.id === goalId ? { ...g, status: newStatus } : g
+    );
     setSavedGoals(updatedGoals);
     await saveGoalsToStorage(updatedGoals);
-
-    // 위젯 업데이트
     await triggerWidgetUpdate();
-
+    
+    // 선택된 날짜의 목표 목록도 업데이트
     if (selectedCalendarDate) {
-      const updatedDateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
-      setSelectedDateGoals(updatedDateGoals);
+      const dateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
+      setSelectedDateGoals(dateGoals);
     }
   }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
-  // 제약 상태 변경
-  const updateConstraintStatus = useCallback(async (goalId, status) => {
-    const updatedGoals = savedGoals.map(g => {
-      if (g.id === goalId) {
-        return { ...g, constraintStatus: status };
-      }
-      return g;
-    });
-
+  // 제약 상태 업데이트
+  const updateConstraintStatus = useCallback(async (goalId, newStatus) => {
+    const updatedGoals = savedGoals.map(g => 
+      g.id === goalId ? { ...g, constraintStatus: newStatus } : g
+    );
     setSavedGoals(updatedGoals);
     await saveGoalsToStorage(updatedGoals);
-
-    // 위젯 업데이트
     await triggerWidgetUpdate();
-
+    
+    // 선택된 날짜의 목표 목록도 업데이트
     if (selectedCalendarDate) {
-      setSelectedDateGoals(updatedGoals.filter(g => g.date === selectedCalendarDate));
+      const dateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
+      setSelectedDateGoals(dateGoals);
     }
   }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
   // 타이머 완료 처리
-  const handleTimerComplete = useCallback(async (goalId, newStatus) => {
-    console.log('타이머 완료:', goalId, newStatus);
-
-    const latestGoals = await loadGoalsFromStorage();
-    const updatedGoals = latestGoals.map(g => {
-      if (g.id === goalId) {
-        return { ...g, status: newStatus };
-      }
-      return g;
-    });
-
-    setSavedGoals(updatedGoals);
-    await saveGoalsToStorage(updatedGoals);
-
-    // 위젯 업데이트
-    await triggerWidgetUpdate();
-
-    const completedGoal = updatedGoals.find(g => g.id === goalId);
-    if (completedGoal && completedGoal.date) {
-      setSelectedCalendarDate(completedGoal.date);
-      const dateGoals = updatedGoals.filter(g => g.date === completedGoal.date);
-      setSelectedDateGoals(dateGoals);
-
-      setTimeout(() => {
-        setCurrentScreen(SCREENS.GOAL_DETAIL);
-      }, 100);
-    } else {
-      setCurrentScreen(SCREENS.GOAL_CALENDAR);
-    }
-  }, [triggerWidgetUpdate]);
+  const handleTimerComplete = useCallback(async (goalId) => {
+    // 타이머 완료 시 처리
+    setCurrentScreen(SCREENS.GOAL_DETAIL);
+  }, []);
 
   // 특정 날짜에 목표가 있는지 확인
   const hasGoalsOnDate = useCallback((day, month, year) => {
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dateString = formatDateString(year, month, day);
     return savedGoals.some(g => g.date === dateString);
   }, [savedGoals]);
 
-  // 달력 날짜 선택
+  // 달력에서 날짜 선택
   const selectCalendarDate = useCallback((day, month, year) => {
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dateString = formatDateString(year, month, day);
     setSelectedCalendarDate(dateString);
     
-    const filteredGoals = savedGoals.filter(g => g.date === dateString);
-    setSelectedDateGoals(filteredGoals);
+    const dateGoals = savedGoals.filter(g => g.date === dateString);
+    setSelectedDateGoals(dateGoals);
     
     setCurrentScreen(SCREENS.GOAL_DETAIL);
   }, [savedGoals]);
 
   // 타이머 화면으로 이동
-  const navigateToTimerScreen = useCallback((selectedGoal) => {
-    if (!selectedGoal || !selectedGoal.time || !selectedGoal.date) {
-      console.warn('⚠️ 잘못된 목표 값으로 타이머 진입 시도됨');
-      return;
-    }
-    setSelectedGoalForTimer(selectedGoal);
+  const navigateToTimerScreen = useCallback((goalForTimer) => {
+    setSelectedGoalForTimer(goalForTimer);
     setCurrentScreen(SCREENS.TIMER);
   }, []);
 
@@ -284,13 +214,31 @@ export const GoalProvider = ({ children }) => {
     setEditGoalModal(true);
   }, []);
 
-  // 초기 데이터 로드
+  // 초기 데이터 로드 및 오늘 목표 화면으로 이동
   useEffect(() => {
     const loadInitialData = async () => {
       const goals = await loadGoalsFromStorage();
       if (goals.length > 0) {
         setSavedGoals(goals);
       }
+      
+      // ✅ 앱 시작 시 오늘 날짜 자동 선택 및 오늘 목표 화면으로 이동
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const day = today.getDate();
+      
+      // 오늘 날짜 포맷 (YYYY-MM-DD)
+      const todayString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      setSelectedCalendarDate(todayString);
+      
+      // 오늘 목표 필터링
+      const todayGoals = goals.filter(g => g.date === todayString);
+      setSelectedDateGoals(todayGoals);
+      
+      // 오늘 목표 화면으로 이동
+      setCurrentScreen(SCREENS.GOAL_DETAIL);
+      
       // 앱 시작 시 위젯 업데이트
       await triggerWidgetUpdate();
     };
