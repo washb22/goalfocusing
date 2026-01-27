@@ -1,4 +1,5 @@
 // TimerScreen.js - 개선된 UI 버전 (Expo SDK 53 호환)
+// SVG 원형 프로그레스 + 보상/제약 표시 + 알림 클릭 시 즉시 모달
 
 import React, { useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
@@ -22,20 +23,18 @@ const windowHeight = Dimensions.get('window').height;
 const isTablet = windowWidth > 768 || windowHeight > 1024;
 
 // 색상 상수
-const PURPLE_COLOR = '#8b5cf6'; // 보라색
+const PURPLE_COLOR = '#8b5cf6';
 
-// 기기 화면 크기에 따른 반응형 크기 계산 함수
+// 반응형 크기 계산
 const normalize = (size, factor = 0.5) => {
   const scale = isTablet ? windowWidth / 1024 : windowWidth / 375;
   const newSize = size * (isTablet ? 1 : scale);
   return Math.round(PixelRatio.roundToNearestPixel(newSize));
 };
 
-// 반응형 타이머 크기 계산 - 화면 비율에 맞게 조정
+// 반응형 타이머 크기 계산
 const getTimerSize = () => {
-  // 화면 비율에 따라 타이머 크기 조정 - 더 크게 조정
   const baseSize = Math.min(windowWidth * 0.75, windowHeight * 0.38);
-  // 최대 크기 제한 증가
   const maxSize = isTablet ? 500 : 320;
   return Math.min(baseSize, maxSize);
 };
@@ -73,10 +72,10 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
   const timerRef = useRef(null);
   const initialTimeRef = useRef(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  // 타이머 완료 상태를 추적하는 새로운 ref 추가
   const isCompletedRef = useRef(false);
+  const hasShownModalRef = useRef(false); // ✅ 모달 표시 여부 추적
 
-  // 디바이스 회전 및 크기 변경에 대응하기 위한 상태
+  // 디바이스 크기 상태
   const [dimensions, setDimensions] = useState({
     width: windowWidth,
     height: windowHeight
@@ -84,9 +83,9 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
   const [timerSize, setTimerSize] = useState(getTimerSize());
 
   // 반응형 설정
-  const strokeWidth = normalize(16, 0.3); // 두께 증가
+  const strokeWidth = normalize(16, 0.3);
   const radius = (timerSize - strokeWidth) / 2;
-  const bubbleRadius = normalize(18); // 버블 크기 증가
+  const bubbleRadius = normalize(18);
 
   // 디바이스 화면 회전/크기 변경 감지
   useEffect(() => {
@@ -103,12 +102,11 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     return () => {
       if (subscription?.remove) {
         subscription.remove();
-      } else {
-        Dimensions.removeEventListener('change', handleDimensionsChange);
       }
     };
   }, []);
 
+  // 웹 타이머 훅
   const useWebTimer = (callback, interval) => {
     const savedCallback = useRef();
     const intervalId = useRef(null);
@@ -134,9 +132,9 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     setRemainingTime(prev => {
       if (prev <= 1) {
         if (!isCompletedRef.current) {
-          animatedValue.setValue(1); // 퍼센트 100%로 설정
-          handleTimerComplete(); // 완료 처리 (1회만 실행)
-          isCompletedRef.current = true; // 완료 상태로 표시
+          animatedValue.setValue(1);
+          handleTimerComplete();
+          isCompletedRef.current = true;
         }
         return 0;
       }
@@ -144,59 +142,72 @@ const TimerScreen = ({ goal, onBack, onComplete }) => {
     });
   }, 1000);
 
-const calculateTimeRemaining = () => {
-  if (!goal || !goal.date || !goal.time) return 0;
+  // 남은 시간 계산 (로컬 시간 기준)
+  const calculateTimeRemaining = () => {
+    if (!goal || !goal.date || !goal.time) return 0;
 
-  const now = new Date();
+    try {
+      const now = new Date();
+      
+      // 목표 시간 파싱
+      const [h, m] = goal.time.split(':').map(Number);
+      
+      // ✅ 날짜를 로컬 시간대로 파싱 (UTC 문제 방지)
+      const [year, month, day] = goal.date.split('-').map(Number);
+      const target = new Date(year, month - 1, day, h, m, 0, 0);
 
-  // 현재 시각을 한국시간으로 보정
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const koreaNow = new Date(utc + 9 * 60 * 60 * 1000); // KST = UTC+9
-
-    const [h, m] = goal.time.split(':').map(Number);
-    const target = new Date(goal.date);
-    target.setHours(h, m, 0);
-
-    const diffInSeconds = Math.floor((target.getTime() - koreaNow.getTime()) / 1000);
-    return diffInSeconds > 0 ? diffInSeconds : 0;
+      const diffInSeconds = Math.floor((target.getTime() - now.getTime()) / 1000);
+      return diffInSeconds > 0 ? diffInSeconds : 0;
+    } catch (error) {
+      console.error('시간 계산 오류:', error);
+      return 0;
+    }
   };
 
-  // 목표 전체 시간 계산 함수
+  // 목표 전체 시간 계산
   const calculateTotalDuration = () => {
     if (!goal || !goal.date || !goal.time || !goal.createdAt) {
-      // 필요한 데이터가 없으면 기본값 반환
-      return 3600; // 기본값 1시간
+      return 3600;
     }
 
     try {
+      // 목표 시간 파싱
       const [h, m] = goal.time.split(':').map(Number);
-      const target = new Date(goal.date);
-      target.setHours(h, m, 0);
+      const [year, month, day] = goal.date.split('-').map(Number);
+      const target = new Date(year, month - 1, day, h, m, 0, 0);
 
+      // 시작 시간 파싱
       const [ch, cm] = goal.createdAt.split(':').map(Number);
-      const created = new Date(goal.date);
-      created.setHours(ch, cm, 0);
+      const created = new Date(year, month - 1, day, ch, cm, 0, 0);
 
       const duration = Math.floor((target.getTime() - created.getTime()) / 1000);
-      // 음수나 0인 경우 기본값 사용
       return duration > 0 ? duration : 3600;
     } catch (error) {
       console.error('시간 계산 오류:', error);
-      return 3600; // 오류 발생 시 기본값
+      return 3600;
     }
   };
 
-  // ✅ 중복 호출 방지 보강
+  // ✅ 타이머 완료 처리 (이미 완료/실패면 모달 안 띄움)
   const handleTimerComplete = async () => {
     if (isCompletedRef.current) return;
-
-    isCompletedRef.current = true;  // 🚫 여기서 바로 true로 고정
+    
+    // ✅ 이미 완료/실패 상태면 모달 안 띄움
     if (goal.status === 'completed' || goal.status === 'failed') {
-      console.log('⛔️ 이미 처리된 목표. 알림 생략');
+      console.log('⛔️ 이미 처리된 목표. 모달 생략');
+      isCompletedRef.current = true;
       return;
     }
 
-    // 애니메이션 값을 100%로 설정
+    // 모달 이미 표시했으면 생략
+    if (hasShownModalRef.current) {
+      console.log('⛔️ 이미 모달 표시됨. 생략');
+      return;
+    }
+
+    isCompletedRef.current = true;
+    hasShownModalRef.current = true;
+
     console.log('⏰ 완료 처리 시작');
     animatedValue.setValue(1);
 
@@ -206,9 +217,13 @@ const calculateTimeRemaining = () => {
         onComplete && onComplete(goal.id, 'completed');
       }
     } else {
-      if (BackgroundTimer && timerRef.current) BackgroundTimer.clearInterval(timerRef.current);
-      if (Vibration) Vibration.vibrate([500, 200, 500]);
-      
+      if (BackgroundTimer && timerRef.current) {
+        BackgroundTimer.clearInterval(timerRef.current);
+      }
+      if (Vibration) {
+        Vibration.vibrate([500, 200, 500]);
+      }
+
       // Expo SDK 53 호환: trigger: null로 즉시 발송
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -217,9 +232,9 @@ const calculateTimeRemaining = () => {
           sound: true,
           ...(Platform.OS === 'android' && { channelId: 'goal-timer-channel' }),
         },
-        trigger: null, // 즉시 발송 (Expo SDK 53 호환)
+        trigger: null,
       });
-      
+
       Alert.alert('타이머 완료', `'${goal.goal}' 목표 시간에 도달했습니다!`, [
         { text: '완료로 표시', onPress: () => onComplete && onComplete(goal.id, 'completed') },
         { text: '실패로 표시', onPress: () => onComplete && onComplete(goal.id, 'failed') },
@@ -229,42 +244,80 @@ const calculateTimeRemaining = () => {
     }
   };
 
-useEffect(() => {
-  const total = calculateTotalDuration();
-  const remaining = calculateTimeRemaining();
-  setRemainingTime(remaining);
-  initialTimeRef.current = total;
+  // 초기화 및 타이머 시작
+  useEffect(() => {
+    const initial = calculateTotalDuration();
+    const remaining = calculateTimeRemaining();
+    initialTimeRef.current = initial;
+    setRemainingTime(remaining);
 
-  const interval = setInterval(() => {
-    const updated = calculateTimeRemaining();
-    setRemainingTime(updated);
+    // 페이드 인 애니메이션
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
 
-    if (updated <= 0 && !isCompletedRef.current) {
-      handleTimerComplete(); // 푸시 알림 포함 완료 처리
+    // ✅ 이미 완료/실패 상태면 모달 안 띄움
+    if (goal.status === 'completed' || goal.status === 'failed') {
+      isCompletedRef.current = true;
+      hasShownModalRef.current = true;
+      animatedValue.setValue(1);
+      return;
     }
-  }, 1000);
 
-  return () => clearInterval(interval);
-}, []);
+    // ✅ 알림에서 왔고 시간이 다 됐으면 즉시 모달 표시
+    if (goal.fromNotification && remaining <= 0) {
+      console.log('📲 알림에서 옴 + 시간 만료 → 즉시 모달 표시');
+      setTimeout(() => {
+        handleTimerComplete();
+      }, 500);
+      return;
+    }
 
+    // 타이머 시작
+    if (isWeb) {
+      webTimer.start();
+    } else if (BackgroundTimer) {
+      timerRef.current = BackgroundTimer.setInterval(() => {
+        setRemainingTime(prev => {
+          if (prev <= 1) {
+            if (!isCompletedRef.current) {
+              animatedValue.setValue(1);
+              handleTimerComplete();
+              isCompletedRef.current = true;
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
 
+    return () => {
+      if (isWeb) {
+        webTimer.stop();
+      } else if (BackgroundTimer && timerRef.current) {
+        BackgroundTimer.clearInterval(timerRef.current);
+      }
+    };
+  }, [goal]);
+
+  // 진행률 업데이트
   useEffect(() => {
     if (initialTimeRef.current > 0) {
       if (remainingTime > 0) {
-        // 남은 시간이 있을 때의 진행률 계산
         const newProgress = 1 - remainingTime / initialTimeRef.current;
         const clampedProgress = Math.max(0, Math.min(1, newProgress));
         animatedValue.setValue(clampedProgress);
-        console.log('진행률:', clampedProgress, '남은 시간:', remainingTime, '전체 시간:', initialTimeRef.current);
       } else if (remainingTime === 0) {
-        // 남은 시간이 0인 경우 항상 100%로 표시
         animatedValue.setValue(1);
-        console.log('⏰ 완료! 퍼센트 100% 설정됨');
       }
     }
   }, [remainingTime]);
 
   const progress = animatedValue;
+  
   const formatTime = (s) => {
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
@@ -272,31 +325,25 @@ useEffect(() => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  // 퍼센트 계산 (0-100)
+  // 퍼센트 계산
   const percent = Math.min(
     100,
     Math.max(0, Math.round((1 - remainingTime / Math.max(initialTimeRef.current, 1)) * 100))
   );
 
-  // 시작 시간과 종료 시간
+  // 시작/종료 시간
   const startTime = goal?.createdAt || '--:--';
   const endTime = goal?.time || '--:--';
 
-  // 타이머 크기에 맞춘 위치 계산
+  // 타이머 중심 좌표
   const cx = timerSize / 2;
   const cy = timerSize / 2;
 
   // 퍼센트 버블 위치 계산
   const getPercentPosition = () => {
-    // 현재 진행률 (0~1)
     const currentProgress = 1 - remainingTime / Math.max(initialTimeRef.current, 1);
     const clampedProgress = Math.max(0, Math.min(1, currentProgress));
-
-    // 각도 계산 (시계 반대방향, 12시 방향에서 시작)
-    // -90도(12시)에서 시작하여 진행률에 따라 회전
     const angle = (-90 + clampedProgress * 360) * (Math.PI / 180);
-
-    // 위치 계산
     return {
       x: cx + radius * Math.cos(angle),
       y: cy + radius * Math.sin(angle)
@@ -307,28 +354,25 @@ useEffect(() => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.innerContainer}>
+      <Animated.View style={[styles.innerContainer, { opacity: fadeAnim }]}>
         <View style={styles.headerContainer}>
           <TouchableOpacity style={styles.backButton} onPress={() => onBack?.()}>
             <Text style={styles.backButtonText}>{'<'} 돌아가기</Text>
           </TouchableOpacity>
-
         </View>
 
         <View style={styles.contentContainer}>
           <Text style={styles.title}>달성 목표</Text>
 
-          {/* 목표 이름 표시 (수정된 부분) */}
+          {/* 목표 이름 표시 */}
           {goal?.goal && (
             <Text style={styles.goalName}>{goal.goal}</Text>
           )}
 
-          {/* "꾸준한 목표 달성이 미래의 나를 만듭니다" 문구 제거 */}
-
+          {/* SVG 타이머 */}
           {Svg && Circle && AnimatedCircle && (
             <View style={styles.timerWrapper}>
               <View style={styles.timerContainer}>
-                {/* SVG 타이머 - 원과 진행 상태 */}
                 <Svg
                   width={timerSize}
                   height={timerSize}
@@ -364,7 +408,7 @@ useEffect(() => {
                   />
                 </Svg>
 
-                {/* 퍼센트 버블 (따로 그리기) */}
+                {/* 퍼센트 버블 */}
                 <View
                   style={[
                     styles.percentBubble,
@@ -382,12 +426,18 @@ useEffect(() => {
                   </Text>
                 </View>
 
-                {/* 중앙 시간 표시 */}
+                {/* 중앙 내용 - 시간 + 메시지 + 보상/제약 */}
                 <View style={styles.centerTimeContainer}>
                   <Text style={styles.timeDisplay}>
                     {formatTime(remainingTime)}
                   </Text>
-                  <Text style={styles.subtitleText}>목표는 이루라고 있는 것</Text>
+                  <Text style={styles.subtitleText}>목표는 이루라고 있는것</Text>
+                  {goal?.reward && (
+                    <Text style={styles.rewardPenaltyText}>성공보상: {goal.reward}</Text>
+                  )}
+                  {goal?.penalty && (
+                    <Text style={styles.rewardPenaltyText}>실패제약: {goal.penalty}</Text>
+                  )}
                 </View>
               </View>
             </View>
@@ -399,7 +449,7 @@ useEffect(() => {
               <Text style={styles.timeValue}>{startTime}</Text>
             </View>
             <View style={styles.timeBox}>
-              <Text style={styles.timeLabel}>종료</Text>
+              <Text style={styles.timeLabel}>목표</Text>
               <Text style={styles.timeValue}>{endTime}</Text>
             </View>
           </View>
@@ -408,7 +458,7 @@ useEffect(() => {
         <Text style={styles.footerDescription}>
           제약은 나를 움직이게 하는{'\n'}가장 강력한 무기 입니다.
         </Text>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -422,20 +472,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: normalize(16),
-    paddingTop: normalize(12), // 상단 여백 증가
+    paddingTop: normalize(12),
     paddingBottom: normalize(16),
     justifyContent: 'space-between',
   },
   headerContainer: {
     width: '100%',
     paddingHorizontal: normalize(4),
-    marginBottom: normalize(12), // 여백 증가
+    marginBottom: normalize(12),
   },
   contentContainer: {
     alignItems: 'center',
     width: '100%',
-    flex: 1, // 중앙 콘텐츠가 더 많은 공간 차지
-    justifyContent: 'center', // 중앙 정렬 추가
+    flex: 1,
+    justifyContent: 'center',
   },
   backButton: {
     paddingVertical: normalize(6),
@@ -445,39 +495,36 @@ const styles = StyleSheet.create({
     fontSize: normalize(16)
   },
   title: {
-    fontSize: normalize(16), // 크기 증가
-     fontWeight: '500', // 두께 감소
-        color: '#94a3b8', // 회색 톤으로 변경
-        marginBottom: normalize(6), // 간격 조정
-      },
-
-goalName: {
-  fontSize: normalize(24), // 24 사이즈 유지
-  fontWeight: '700', // 굵게
-  color: '#ffffff', // 화이트 색상
-  textAlign: 'center',
-  marginBottom: normalize(26), // 아래 여백
-  letterSpacing: 0.5, // 글자 간격
-  lineHeight: normalize(32), // 줄 간격 추가
-  flexWrap: 'wrap', // 자동 줄바꿈 확실히
-  maxWidth: '85%', // 최대 너비 제한
-  alignSelf: 'center', // 중앙 정렬
-  paddingHorizontal: normalize(8), // 좌우 패딩 추가
-},
+    fontSize: normalize(16),
+    fontWeight: '500',
+    color: '#94a3b8',
+    marginBottom: normalize(6),
+  },
+  goalName: {
+    fontSize: normalize(24),
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: normalize(26),
+    letterSpacing: 0.5,
+    lineHeight: normalize(32),
+    flexWrap: 'wrap',
+    maxWidth: '85%',
+    alignSelf: 'center',
+    paddingHorizontal: normalize(8),
+  },
   timerWrapper: {
     padding: normalize(8),
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: normalize(16), // 여백 증가
+    marginVertical: normalize(16),
   },
   timerContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timerSvg: {
-    // 여백 없음
-  },
+  timerSvg: {},
   centerTimeContainer: {
     position: 'absolute',
     top: 0,
@@ -490,19 +537,27 @@ goalName: {
     paddingHorizontal: normalize(20),
   },
   timeDisplay: {
-    fontSize: normalize(34), // 크기 증가
+    fontSize: normalize(34),
     fontWeight: 'bold',
     color: PURPLE_COLOR,
     textAlign: 'center',
     includeFontPadding: false,
     textAlignVertical: 'center',
-    marginBottom: normalize(4), // 여백 증가
+    marginBottom: normalize(4),
   },
   subtitleText: {
-    fontSize: normalize(14), // 크기 증가
-    color: '#bbb', // 색상 밝게
+    fontSize: normalize(13),
+    color: '#bbb',
     textAlign: 'center',
-    fontWeight: '500', // 약간 굵게
+    fontWeight: '500',
+    marginBottom: normalize(4),
+  },
+  // ✅ 보상/제약 텍스트 스타일 (이모지 없이, 같은 글씨체)
+  rewardPenaltyText: {
+    fontSize: normalize(12),
+    color: '#999',
+    textAlign: 'center',
+    marginTop: normalize(2),
   },
   percentBubble: {
     position: 'absolute',
@@ -510,7 +565,6 @@ goalName: {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    // 그림자 효과 추가
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -519,7 +573,7 @@ goalName: {
   },
   percentText: {
     color: 'white',
-    fontSize: normalize(13), // 크기 증가
+    fontSize: normalize(13),
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -527,21 +581,21 @@ goalName: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginTop: normalize(20), // 여백 증가
+    marginTop: normalize(20),
     paddingHorizontal: normalize(10),
     marginBottom: normalize(10),
   },
   timeBox: {
     backgroundColor: '#1e1e1e',
     borderRadius: normalize(10),
-    padding: normalize(12), // 패딩 증가
+    padding: normalize(12),
     alignItems: 'center',
     width: '40%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
-    elevation: 3, // 그림자 효과 증가
+    elevation: 3,
   },
   timeLabel: {
     color: '#aaa',
@@ -550,17 +604,17 @@ goalName: {
   timeValue: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: normalize(16), // 크기 증가
+    fontSize: normalize(16),
     marginTop: normalize(4)
   },
   footerDescription: {
-    fontSize: normalize(13), // 크기 감소
-    color: '#999', // 색상 밝게
+    fontSize: normalize(13),
+    color: '#999',
     textAlign: 'center',
     marginTop: normalize(5),
-    marginBottom: normalize(60), // 네비게이션 바 여백
+    marginBottom: normalize(60),
     lineHeight: normalize(18),
-    fontWeight: '400', // 보통 굵기
+    fontWeight: '400',
   }
 });
 

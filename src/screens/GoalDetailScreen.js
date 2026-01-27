@@ -1,13 +1,12 @@
 // src/screens/GoalDetailScreen.js
-// 목표 상세 화면 (공유 기능 포함 - 네이티브 모듈 불필요)
+// 목표 상세 화면 (공유 기능 포함)
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Share } from 'react-native';
 import { useGoals } from '../context/GoalContext';
 import { COLORS } from '../constants/colors';
 import { GOAL_STATUS, CONSTRAINT_STATUS } from '../constants/goalStatus';
-import { sortGoalsByTime, formatDateString } from '../utils/dateUtils';
-import ShareModal, { SHARE_TYPE } from '../components/modals/ShareModal';
+import { sortGoalsByTime } from '../utils/dateUtils';
 
 const GoalDetailScreen = ({
   onOpenStatusModal,
@@ -22,25 +21,41 @@ const GoalDetailScreen = ({
     deleteGoal,
   } = useGoals();
 
-  // 공유 모달 상태
-  const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [selectedGoalForShare, setSelectedGoalForShare] = useState(null);
-  const [shareType, setShareType] = useState(SHARE_TYPE.DECLARATION);
-
   const sortedGoals = sortGoalsByTime(selectedDateGoals);
 
   // 목표 선언 공유
-  const handleShareDeclaration = (goal) => {
-    setSelectedGoalForShare(goal);
-    setShareType(SHARE_TYPE.DECLARATION);
-    setShareModalVisible(true);
+  const handleShareDeclaration = async (goal) => {
+    try {
+      const message = `🎯 목표 선언!\n\n` +
+        `📋 목표: ${goal.goal}\n` +
+        `📅 날짜: ${goal.date}\n` +
+        `⏰ 시간: ${goal.time}\n` +
+        (goal.reward ? `🎁 보상: ${goal.reward}\n` : '') +
+        (goal.penalty ? `⚠️ 제약: ${goal.penalty}\n` : '') +
+        `\n#골포커싱 #목표달성`;
+
+      await Share.share({ message });
+    } catch (error) {
+      console.error('공유 실패:', error);
+    }
   };
 
   // 결과 공유
-  const handleShareResult = (goal) => {
-    setSelectedGoalForShare(goal);
-    setShareType(SHARE_TYPE.RESULT);
-    setShareModalVisible(true);
+  const handleShareResult = async (goal) => {
+    try {
+      const statusEmoji = goal.status === GOAL_STATUS.COMPLETED ? '✅' : '❌';
+      const statusText = goal.status === GOAL_STATUS.COMPLETED ? '성공' : '실패';
+      
+      const message = `${statusEmoji} 목표 ${statusText}!\n\n` +
+        `📋 목표: ${goal.goal}\n` +
+        `📅 날짜: ${goal.date}\n` +
+        `⏰ 시간: ${goal.time}\n` +
+        `\n#골포커싱 #목표달성`;
+
+      await Share.share({ message });
+    } catch (error) {
+      console.error('공유 실패:', error);
+    }
   };
 
   // 삭제 확인
@@ -82,7 +97,7 @@ const GoalDetailScreen = ({
     switch (status) {
       case CONSTRAINT_STATUS.KEPT: return '✅ 지킴';
       case CONSTRAINT_STATUS.BROKEN: return '❌ 못지킴';
-      default: return '선택';
+      default: return '제약 처리';
     }
   };
 
@@ -91,7 +106,7 @@ const GoalDetailScreen = ({
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={navigateToCalendarView} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← 달력</Text>
+          <Text style={styles.backButtonText}>{'<'} 돌아가기</Text>
         </TouchableOpacity>
         <Text style={styles.dateTitle}>{selectedCalendarDate}</Text>
         <View style={styles.headerRight} />
@@ -105,9 +120,11 @@ const GoalDetailScreen = ({
           </View>
         ) : (
           sortedGoals.map((goal) => (
-            <View 
+            <TouchableOpacity 
               key={goal.id} 
               style={styles.goalCard}
+              onPress={() => navigateToTimerScreen(goal)}
+              activeOpacity={0.8}
             >
               {/* 목표 정보 */}
               <View style={styles.goalInfo}>
@@ -126,16 +143,22 @@ const GoalDetailScreen = ({
               <View style={styles.statusContainer}>
                 <TouchableOpacity 
                   style={[styles.statusBadge, { backgroundColor: getStatusColor(goal.status) }]}
-                  onPress={() => onOpenStatusModal(goal)}
+                  onPress={(e) => {
+                    e.stopPropagation && e.stopPropagation();
+                    onOpenStatusModal && onOpenStatusModal(goal);
+                  }}
                 >
                   <Text style={styles.statusText}>{getStatusText(goal.status)}</Text>
                 </TouchableOpacity>
 
                 {/* 제약 상태 (보상/제약이 있을 때만) */}
-                {(goal.reward || goal.penalty) && goal.status !== GOAL_STATUS.PENDING && (
+                {(goal.reward || goal.penalty) && (
                   <TouchableOpacity 
                     style={styles.constraintBadge}
-                    onPress={() => onOpenConstraintModal(goal)}
+                    onPress={(e) => {
+                      e.stopPropagation && e.stopPropagation();
+                      onOpenConstraintModal && onOpenConstraintModal(goal);
+                    }}
                   >
                     <Text style={styles.constraintText}>
                       {getConstraintText(goal.constraintStatus)}
@@ -150,7 +173,10 @@ const GoalDetailScreen = ({
                 {goal.status === GOAL_STATUS.PENDING && (
                   <TouchableOpacity 
                     style={styles.timerButton}
-                    onPress={() => navigateToTimerScreen(goal)}
+                    onPress={(e) => {
+                      e.stopPropagation && e.stopPropagation();
+                      navigateToTimerScreen(goal);
+                    }}
                   >
                     <Text style={styles.timerButtonText}>⏱️ 타이머</Text>
                   </TouchableOpacity>
@@ -160,7 +186,10 @@ const GoalDetailScreen = ({
                 {goal.status === GOAL_STATUS.PENDING && (
                   <TouchableOpacity 
                     style={styles.shareButton}
-                    onPress={() => handleShareDeclaration(goal)}
+                    onPress={(e) => {
+                      e.stopPropagation && e.stopPropagation();
+                      handleShareDeclaration(goal);
+                    }}
                   >
                     <Text style={styles.shareButtonText}>📢 선언</Text>
                   </TouchableOpacity>
@@ -170,7 +199,10 @@ const GoalDetailScreen = ({
                 {goal.status !== GOAL_STATUS.PENDING && (
                   <TouchableOpacity 
                     style={styles.shareButton}
-                    onPress={() => handleShareResult(goal)}
+                    onPress={(e) => {
+                      e.stopPropagation && e.stopPropagation();
+                      handleShareResult(goal);
+                    }}
                   >
                     <Text style={styles.shareButtonText}>📢 결과공유</Text>
                   </TouchableOpacity>
@@ -179,7 +211,10 @@ const GoalDetailScreen = ({
                 {/* 수정 버튼 */}
                 <TouchableOpacity 
                   style={styles.editButton}
-                  onPress={() => openEditModal(goal)}
+                  onPress={(e) => {
+                    e.stopPropagation && e.stopPropagation();
+                    openEditModal(goal);
+                  }}
                 >
                   <Text style={styles.editButtonText}>✏️</Text>
                 </TouchableOpacity>
@@ -187,23 +222,21 @@ const GoalDetailScreen = ({
                 {/* 삭제 버튼 */}
                 <TouchableOpacity 
                   style={styles.deleteButton}
-                  onPress={() => handleDeleteGoal(goal.id)}
+                  onPress={(e) => {
+                    e.stopPropagation && e.stopPropagation();
+                    handleDeleteGoal(goal.id);
+                  }}
                 >
                   <Text style={styles.deleteButtonText}>🗑️</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
+        
+        {/* 하단 여백 */}
+        <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* 공유 모달 */}
-      <ShareModal
-        visible={shareModalVisible}
-        onClose={() => setShareModalVisible(false)}
-        goal={selectedGoalForShare}
-        shareType={shareType}
-      />
     </View>
   );
 };
@@ -256,7 +289,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    // borderLeftWidth 삭제 - 왼쪽 검정 공간 문제 해결
   },
   goalInfo: {
     marginBottom: 12,

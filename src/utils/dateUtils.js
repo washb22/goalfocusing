@@ -80,19 +80,14 @@ export const formatDateString = (year, month, day) => {
 };
 
 /**
- * 현재 시간을 HH:MM 형식으로 반환 (한국 시간)
+ * 현재 시간을 HH:MM 형식으로 반환 (로컬 시간)
+ * ✅ 수정: 한국 시간대 강제 적용 제거 → 기기 로컬 시간 사용
  */
 export const getCurrentTimeString = () => {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Seoul',
-  });
-  const parts = formatter.formatToParts(new Date());
-  const hour = parts.find(p => p.type === 'hour')?.value;
-  const minute = parts.find(p => p.type === 'minute')?.value;
-  return `${hour}:${minute}`;
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 };
 
 /**

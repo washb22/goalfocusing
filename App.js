@@ -1,7 +1,7 @@
 // App.js
-// 리팩토링된 메인 앱 파일
+// 리팩토링된 메인 앱 파일 - 푸시 알림 클릭 시 타이머로 바로 이동
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import mobileAds from 'react-native-google-mobile-ads';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
+import * as Notifications from 'expo-notifications';
 
 // Context
 import { GoalProvider, useGoals } from './src/context/GoalContext';
@@ -61,6 +62,7 @@ const AppContent = () => {
     savedGoals,
     setSavedGoals,
     selectedGoalForTimer,
+    setSelectedGoalForTimer,
     handleTimerComplete,
     goal,
     setGoal,
@@ -88,6 +90,7 @@ const AppContent = () => {
   const [showStatusOptions, setShowStatusOptions] = useState(false);
   const [showConstraintOptions, setShowConstraintOptions] = useState(false);
   const [currentGoalId, setCurrentGoalId] = useState(null);
+  const [currentGoal, setCurrentGoal] = useState(null);
 
   // 수정용 모달 상태
   const [showEditDateModal, setShowEditDateModal] = useState(false);
@@ -97,41 +100,35 @@ const AppContent = () => {
   const [showEditPenaltyInputModal, setShowEditPenaltyInputModal] = useState(false);
 
   // 날짜/시간 선택 상태
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedDay, setSelectedDay] = useState(new Date().getDate());
+  const today = new Date();
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState(today.getDate());
   const [selectedHour, setSelectedHour] = useState(12);
   const [selectedMinute, setSelectedMinute] = useState(0);
-  const [selectedPeriod, setSelectedPeriod] = useState('AM');
+  const [selectedPeriod, setSelectedPeriod] = useState('PM');
+
+  // ✅ 푸시 알림 클릭 시 타이머로 바로 이동하기 위한 ref
+  const notificationListener = useRef();
+  const responseListener = useRef();
 
   // 입력 모달 열기
-  const openInputModal = (field) => {
-    if (field === 'goal') {
-      setShowGoalInputModal(true);
-    } else if (field === 'reward') {
-      setShowRewardInputModal(true);
-    } else if (field === 'penalty') {
-      setShowPenaltyInputModal(true);
+  const openInputModal = (type) => {
+    switch (type) {
+      case 'goal':
+        setShowGoalInputModal(true);
+        break;
+      case 'reward':
+        setShowRewardInputModal(true);
+        break;
+      case 'penalty':
+        setShowPenaltyInputModal(true);
+        break;
     }
-  };
-
-  // 수정용 입력 모달 열기
-  const openEditInputModal = (field) => {
-    setEditGoalModal(false);
-    setTimeout(() => {
-      if (field === 'goal') {
-        setShowEditGoalInputModal(true);
-      } else if (field === 'reward') {
-        setShowEditRewardInputModal(true);
-      } else if (field === 'penalty') {
-        setShowEditPenaltyInputModal(true);
-      }
-    }, 100);
   };
 
   // 수정용 날짜 모달 열기
   const openEditDateModal = () => {
-    setEditGoalModal(false);
     if (editGoalData.date) {
       const [year, month, day] = editGoalData.date.split('-').map(Number);
       setSelectedYear(year);
@@ -143,7 +140,6 @@ const AppContent = () => {
 
   // 수정용 시간 모달 열기
   const openEditTimeModal = () => {
-    setEditGoalModal(false);
     if (editGoalData.time) {
       const [hour, minute] = editGoalData.time.split(':').map(Number);
       setSelectedHour(hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour));
@@ -184,6 +180,20 @@ const AppContent = () => {
     setCurrentScreen(SCREENS.STATISTICS);
   };
 
+  // ✅ 상태 모달 열기 (goal 정보 저장)
+  const openStatusModal = (goal) => {
+    setCurrentGoalId(goal.id);
+    setCurrentGoal(goal);
+    setShowStatusOptions(true);
+  };
+
+  // ✅ 제약 모달 열기 (goal 정보 저장)
+  const openConstraintModal = (goal) => {
+    setCurrentGoalId(goal.id);
+    setCurrentGoal(goal);
+    setShowConstraintOptions(true);
+  };
+
   // 뒤로가기 버튼 처리
   useEffect(() => {
     const backAction = () => {
@@ -214,18 +224,52 @@ const AppContent = () => {
     return () => backHandler.remove();
   }, [currentScreen]);
 
+  // ✅ 푸시 알림 클릭 시 타이머로 바로 이동
+  useEffect(() => {
+    // 알림 클릭 응답 리스너
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('📲 푸시 알림 클릭됨:', response);
+      
+      const data = response.notification.request.content.data;
+      
+      if (data && data.goalId) {
+        // 해당 목표 찾기
+        const targetGoal = savedGoals.find(g => g.id === data.goalId);
+        
+        if (targetGoal) {
+          console.log('🎯 목표 찾음:', targetGoal.goal);
+          
+          // 이미 완료/실패한 목표면 타이머만 열고 모달은 안 띄움
+          // pending 상태면 타이머로 이동 후 즉시 완료/실패 모달 표시
+          setSelectedGoalForTimer({
+            ...targetGoal,
+            fromNotification: true // 알림에서 온 것 표시
+          });
+          setCurrentScreen(SCREENS.TIMER);
+        } else {
+          console.log('⚠️ 목표를 찾을 수 없음. goalId:', data.goalId);
+        }
+      }
+    });
+
+    return () => {
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
+    };
+  }, [savedGoals]);
+
   // 앱 초기화
   useEffect(() => {
     const initializeApp = async () => {
       try {
         // ⭐ iOS 광고 추적 권한 요청 (반드시 광고 초기화 전에!)
         if (Platform.OS === 'ios') {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // ⬅️ 이 줄 추가!
+          await new Promise(resolve => setTimeout(resolve, 1000));
           console.log('iOS 추적 권한 요청 시작...');
           const { status } = await requestTrackingPermissionsAsync();
           console.log('Tracking permission status:', status);
           
-          // 권한 상태에 따른 처리
           if (status === 'granted') {
             console.log('✅ 추적 허용됨 - 맞춤 광고 제공');
           } else if (status === 'denied') {
@@ -298,9 +342,8 @@ const AppContent = () => {
       case SCREENS.GOAL_DETAIL:
         return (
           <GoalDetailScreen
-            setShowStatusOptions={setShowStatusOptions}
-            setShowConstraintOptions={setShowConstraintOptions}
-            setCurrentGoalId={setCurrentGoalId}
+            onOpenStatusModal={openStatusModal}
+            onOpenConstraintModal={openConstraintModal}
           />
         );
       case SCREENS.STATISTICS:
@@ -344,30 +387,42 @@ const AppContent = () => {
         initialPeriod={selectedPeriod}
       />
 
+      {/* 목표 입력 모달 */}
       <TextInputModal
         visible={showGoalInputModal}
         onClose={() => setShowGoalInputModal(false)}
-        onSave={setGoal}
-        title="달성목표 입력"
-        placeholder="목표를 입력하세요"
+        onSave={(text) => {
+          setGoal(text);
+          setShowGoalInputModal(false);
+        }}
+        title="목표 입력"
+        placeholder="달성하고 싶은 목표를 입력하세요"
         initialValue={goal}
       />
 
+      {/* 보상 입력 모달 */}
       <TextInputModal
         visible={showRewardInputModal}
         onClose={() => setShowRewardInputModal(false)}
-        onSave={setReward}
-        title="성공 보상 입력"
-        placeholder="보상을 입력하세요"
+        onSave={(text) => {
+          setReward(text);
+          setShowRewardInputModal(false);
+        }}
+        title="성공 보상"
+        placeholder="목표 달성 시 자신에게 줄 보상을 입력하세요"
         initialValue={reward}
       />
 
+      {/* 제약 입력 모달 */}
       <TextInputModal
         visible={showPenaltyInputModal}
         onClose={() => setShowPenaltyInputModal(false)}
-        onSave={setPenalty}
-        title="실패 제약 입력"
-        placeholder="제약을 입력하세요"
+        onSave={(text) => {
+          setPenalty(text);
+          setShowPenaltyInputModal(false);
+        }}
+        title="실패 제약"
+        placeholder="목표 실패 시 감수할 제약을 입력하세요"
         initialValue={penalty}
       />
 
@@ -379,6 +434,7 @@ const AppContent = () => {
         goalId={currentGoalId}
       />
 
+      {/* 제약 상태 모달 */}
       <ConstraintStatusModal
         visible={showConstraintOptions}
         onClose={() => setShowConstraintOptions(false)}
@@ -386,14 +442,7 @@ const AppContent = () => {
         goalId={currentGoalId}
       />
 
-      {/* 수정 모달 */}
-      <EditGoalModal
-        onOpenDateModal={openEditDateModal}
-        onOpenTimeModal={openEditTimeModal}
-        onOpenInputModal={openEditInputModal}
-      />
-
-      {/* 수정용 날짜/시간 모달 */}
+      {/* 수정용 모달들 */}
       <DatePickerModal
         visible={showEditDateModal}
         onClose={() => {
@@ -418,16 +467,19 @@ const AppContent = () => {
         initialPeriod={selectedPeriod}
       />
 
-      {/* 수정용 텍스트 입력 모달 */}
       <TextInputModal
         visible={showEditGoalInputModal}
         onClose={() => {
           setShowEditGoalInputModal(false);
           setTimeout(() => setEditGoalModal(true), 100);
         }}
-        onSave={(value) => setEditGoalData(prev => ({ ...prev, goal: value }))}
-        title="달성목표 수정"
-        placeholder="목표를 입력하세요"
+        onSave={(text) => {
+          setEditGoalData(prev => ({ ...prev, goal: text }));
+          setShowEditGoalInputModal(false);
+          setTimeout(() => setEditGoalModal(true), 100);
+        }}
+        title="목표 수정"
+        placeholder="수정할 목표를 입력하세요"
         initialValue={editGoalData.goal}
       />
 
@@ -437,9 +489,13 @@ const AppContent = () => {
           setShowEditRewardInputModal(false);
           setTimeout(() => setEditGoalModal(true), 100);
         }}
-        onSave={(value) => setEditGoalData(prev => ({ ...prev, reward: value }))}
-        title="성공 보상 수정"
-        placeholder="보상을 입력하세요"
+        onSave={(text) => {
+          setEditGoalData(prev => ({ ...prev, reward: text }));
+          setShowEditRewardInputModal(false);
+          setTimeout(() => setEditGoalModal(true), 100);
+        }}
+        title="보상 수정"
+        placeholder="수정할 보상을 입력하세요"
         initialValue={editGoalData.reward}
       />
 
@@ -449,16 +505,29 @@ const AppContent = () => {
           setShowEditPenaltyInputModal(false);
           setTimeout(() => setEditGoalModal(true), 100);
         }}
-        onSave={(value) => setEditGoalData(prev => ({ ...prev, penalty: value }))}
-        title="실패 제약 수정"
-        placeholder="제약을 입력하세요"
+        onSave={(text) => {
+          setEditGoalData(prev => ({ ...prev, penalty: text }));
+          setShowEditPenaltyInputModal(false);
+          setTimeout(() => setEditGoalModal(true), 100);
+        }}
+        title="제약 수정"
+        placeholder="수정할 제약을 입력하세요"
         initialValue={editGoalData.penalty}
+      />
+
+      {/* 목표 수정 모달 */}
+      <EditGoalModal
+        openEditDateModal={openEditDateModal}
+        openEditTimeModal={openEditTimeModal}
+        setShowEditGoalInputModal={setShowEditGoalInputModal}
+        setShowEditRewardInputModal={setShowEditRewardInputModal}
+        setShowEditPenaltyInputModal={setShowEditPenaltyInputModal}
       />
     </SafeAreaView>
   );
 };
 
-// 메인 App 컴포넌트
+// 앱 래퍼
 export default function App() {
   return (
     <SafeAreaProvider>

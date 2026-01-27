@@ -167,11 +167,27 @@ export const GoalProvider = ({ children }) => {
     }
   }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
-  // 타이머 완료 처리
-  const handleTimerComplete = useCallback(async (goalId) => {
-    // 타이머 완료 시 처리
+  // ✅ 타이머 완료 처리 - 상태 업데이트 추가!
+  const handleTimerComplete = useCallback(async (goalId, newStatus) => {
+    // 상태가 전달되면 업데이트
+    if (goalId && newStatus) {
+      const updatedGoals = savedGoals.map(g => 
+        g.id === goalId ? { ...g, status: newStatus } : g
+      );
+      setSavedGoals(updatedGoals);
+      await saveGoalsToStorage(updatedGoals);
+      await triggerWidgetUpdate();
+      
+      // 선택된 날짜의 목표 목록도 업데이트
+      if (selectedCalendarDate) {
+        const dateGoals = updatedGoals.filter(g => g.date === selectedCalendarDate);
+        setSelectedDateGoals(dateGoals);
+      }
+    }
+    
+    // 타이머 완료 시 목표 상세 화면으로 이동
     setCurrentScreen(SCREENS.GOAL_DETAIL);
-  }, []);
+  }, [savedGoals, selectedCalendarDate, triggerWidgetUpdate]);
 
   // 특정 날짜에 목표가 있는지 확인
   const hasGoalsOnDate = useCallback((day, month, year) => {

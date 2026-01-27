@@ -1,4 +1,4 @@
-// StatisticsScreen.js - 하단 여백 최적화
+// StatisticsScreen.js - 원본 복원 + 버그 수정
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, TextInput, Modal, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,8 +52,8 @@ export default function StatisticsScreen() {
   const adUnitId = __DEV__
     ? TestIds.BANNER
     : Platform.OS === 'ios'
-      ? 'ca-app-pub-3077862428685229/8453269694'  // ✅ iOS 배너 광고
-      : 'ca-app-pub-3077862428685229/2520091207'; // ✅ Android 배너 광고
+      ? 'ca-app-pub-3077862428685229/8453269694'  // iOS 배너 광고
+      : 'ca-app-pub-3077862428685229/2520091207'; // Android 배너 광고
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
   const formatDate = (date) => date.toISOString().split('T')[0];
@@ -61,10 +61,10 @@ export default function StatisticsScreen() {
   // 대목표 남은 일수 계산 함수
   const calculateDaysRemaining = (targetDateStr) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // 시간 부분 제거
+    today.setHours(0, 0, 0, 0);
 
     const targetDate = new Date(targetDateStr);
-    targetDate.setHours(0, 0, 0, 0); // 시간 부분 제거
+    targetDate.setHours(0, 0, 0, 0);
 
     const timeDiff = targetDate.getTime() - today.getTime();
     const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
@@ -115,10 +115,9 @@ export default function StatisticsScreen() {
     }
   };
 
-  // 대목표 삭제 함수 추가
+  // 대목표 삭제 함수
   const deleteBigGoal = async () => {
     try {
-      // 삭제 확인
       Alert.alert(
         "골포커싱 삭제",
         "이 목표를 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
@@ -128,12 +127,9 @@ export default function StatisticsScreen() {
             text: "삭제",
             style: "destructive",
             onPress: async () => {
-              // AsyncStorage에서 데이터 삭제
               await AsyncStorage.removeItem('bigGoal');
-              // 상태 초기화
               setBigGoal(null);
               setDaysRemaining(0);
-              // 성공 메시지
               Alert.alert("삭제 완료", "골포커싱이 성공적으로 삭제되었습니다.");
             }
           }
@@ -152,6 +148,7 @@ export default function StatisticsScreen() {
     setShowTargetDatePicker(false);
   };
 
+  // ✅ 버그 수정: goal.date 사용 (createdAt 대신)
   const calculateTodayStats = (goals) => {
     const today = getTodayString();
     const todayGoals = goals.filter(goal => goal.date === today);
@@ -162,6 +159,7 @@ export default function StatisticsScreen() {
     return { total, completed, failed, rate };
   };
 
+  // ✅ 버그 수정: constraintStatus 값 수정 (completed → kept)
   const calculateStatsBetween = (goals, fromDate, toDate, type = 'goal') => {
     const dayMap = new Array(7).fill(0);
     const successMap = new Array(7).fill(0);
@@ -184,12 +182,15 @@ export default function StatisticsScreen() {
         dayMap[dayIndex] += filtered.length;
         totalSuccess += completed;
       } else {
+        // ✅ 버그 수정: constraintStatus 값 처리 (kept, broken 지원)
         filtered = dayGoals.filter(g => g.constraintStatus);
         totalCount += filtered.length;
-        const completed = filtered.filter(g => g.constraintStatus === 'completed').length;
-        successMap[dayIndex] += completed;
+        const kept = filtered.filter(g => 
+          g.constraintStatus === 'kept' || g.constraintStatus === 'completed'
+        ).length;
+        successMap[dayIndex] += kept;
         dayMap[dayIndex] += filtered.length;
-        totalSuccess += completed;
+        totalSuccess += kept;
       }
       date.setDate(date.getDate() + 1);
     }
@@ -208,14 +209,13 @@ export default function StatisticsScreen() {
     setConstraintStats(calculateStatsBetween(goals, startDate, endDate, 'constraint'));
   };
 
-
   const getRateColor = (rate) => {
-    if (rate >= 80) return '#4ade80';   // 초록 (80~100%)
-    if (rate >= 60) return '#86efac';   // 연두 (60~79%)
-    if (rate >= 40) return '#facc15';   // 주황 (40~59%)
-    if (rate >= 20) return '#fb923c';   // 진주황 (20~39%)
-    if (rate >= 1)  return '#ef4444';   // 빨강 (1~19%)
-    return '#334155';                  // 0%일 경우 회색 (선택)
+    if (rate >= 80) return '#4ade80';
+    if (rate >= 60) return '#86efac';
+    if (rate >= 40) return '#facc15';
+    if (rate >= 20) return '#fb923c';
+    if (rate >= 1) return '#ef4444';
+    return '#334155';
   };
 
   const getRateMessage = (rate) => {
@@ -223,7 +223,7 @@ export default function StatisticsScreen() {
     if (rate >= 61) return '제약까지 걸어놓고 이것밖에 못했다고?';
     if (rate >= 41) return '이도 저도 아닌 상태. 제약 걸 땐 끝까지 지켜야지.';
     if (rate >= 21) return '의지가 약한 거야. 핑계 말고 행동해.';
-    if (rate >= 1)  return '시작은 했다.';
+    if (rate >= 1) return '시작은 했다.';
     return '말로만 각오했네. 제약 걸 땐 지켜야지.';
   };
 
@@ -232,14 +232,14 @@ export default function StatisticsScreen() {
     if (rate >= 61) return '목표도 못지키고 제약도 못지키고';
     if (rate >= 41) return '▲▲ 내가 지금 이상태인 이유';
     if (rate >= 21) return '이럴거면 제약걸지 맙시다.';
-    if (rate >= 1)  return '미안해요. 목표달성 힘들거에요.';
+    if (rate >= 1) return '미안해요. 목표달성 힘들거에요.';
     return '말로만 각오했네. 제약 걸 땐 지켜야지.';
   };
 
   useEffect(() => {
     loadGoals();
-    loadBigGoal(); // 대목표 데이터 로드
-    showAdOncePerDay(); // 통계 진입 시 1일 1회 광고
+    loadBigGoal();
+    showAdOncePerDay();
   }, [startDate, endDate]);
 
   const handleRangeSelect = (range) => {
@@ -257,38 +257,35 @@ export default function StatisticsScreen() {
     setSelectedRange(range);
   };
 
+  const interstitialAdUnitId = __DEV__
+    ? TestIds.INTERSTITIAL
+    : 'ca-app-pub-3077862428685229/9380705536';
 
-const interstitialAdUnitId = __DEV__
-  ? TestIds.INTERSTITIAL
-  : 'ca-app-pub-3077862428685229/9380705536'; // 실제 광고 ID
+  const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId);
 
-const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId);
+  const showAdOncePerDay = async () => {
+    const today = dayjs().format('YYYY-MM-DD');
+    const lastShown = await AsyncStorage.getItem('lastAdDate');
 
-const showAdOncePerDay = async () => {
-  const today = dayjs().format('YYYY-MM-DD');
-  const lastShown = await AsyncStorage.getItem('lastAdDate');
+    if (lastShown === today) {
+      return;
+    }
 
-  if (lastShown === today) {
-    return; // 오늘 이미 광고 본 경우
-  }
+    const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, async () => {
+      await AsyncStorage.setItem('lastAdDate', today);
+      unsubscribeClosed();
+    });
 
-  const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, async () => {
-    await AsyncStorage.setItem('lastAdDate', today);
-    unsubscribeClosed();
-  });
+    const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (err) => {
+      console.log('전면 광고 오류:', err);
+      unsubscribeClosed();
+    });
 
-  const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (err) => {
-    console.log('전면 광고 오류:', err);
-    unsubscribeClosed();
-  });
-
-  interstitial.load();
-  interstitial.addAdEventListener(AdEventType.LOADED, () => {
-    interstitial.show();
-  });
-};
-
-
+    interstitial.load();
+    interstitial.addAdEventListener(AdEventType.LOADED, () => {
+      interstitial.show();
+    });
+  };
 
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   const currentStats = selectedTab === 'goal' ? weeklyStats : constraintStats;
@@ -302,7 +299,6 @@ const showAdOncePerDay = async () => {
 
   // 대목표 편집 모달 열기
   const openBigGoalModal = () => {
-    // 기존 대목표가 있으면 해당 값으로 초기화
     if (bigGoal) {
       setNewBigGoalTitle(bigGoal.title);
       setNewTargetDate(bigGoal.targetDate);
@@ -315,17 +311,15 @@ const showAdOncePerDay = async () => {
 
   // 골포커싱 컴포넌트
   const BigGoalComponent = () => {
-    // 대목표가 없는 경우
     if (!bigGoal) {
       return (
         <TouchableOpacity style={styles.bigGoalEmptyCard} onPress={openBigGoalModal}>
-          <Text style={styles.bigGoalEmptyText}>골포커싱 설정하기</Text>
+          <Text style={styles.bigGoalEmptyText}>+ 골포커싱 설정하기</Text>
           <Text style={styles.bigGoalEmptySubtext}>장기적인 목표를 설정하고 미친듯이 노력하세요</Text>
         </TouchableOpacity>
       );
     }
 
-    // 대목표가 있는 경우
     return (
       <View style={styles.bigGoalCard}>
         <View style={styles.bigGoalHeader}>
@@ -368,7 +362,6 @@ const showAdOncePerDay = async () => {
           </View>
         </View>
 
-        {/* 모티베이션 메시지 */}
         <Text style={styles.bigGoalMotivationText}>
           {daysRemaining > 30
             ? '난 할 수 있다.'
@@ -382,13 +375,16 @@ const showAdOncePerDay = async () => {
 
   return (
     <View style={styles.container}>
-      {/* 스크롤 가능한 컨테이너로 감싸기 */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         bounces={true}
         overScrollMode="always"
       >
+        {/* 대목표 컴포넌트 */}
+        <BigGoalComponent />
+
+        {/* 기간 선택 버튼 */}
         <View style={styles.rangeSelector}>
           {['7일', '30일', '전체 기간'].map(label => (
             <TouchableOpacity
@@ -409,6 +405,7 @@ const showAdOncePerDay = async () => {
           ))}
         </View>
 
+        {/* 날짜 선택 */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity onPress={() => setStartPickerVisible(true)}>
             <Text style={styles.dateInput}>{formatDate(startDate)}</Text>
@@ -436,10 +433,7 @@ const showAdOncePerDay = async () => {
           </View>
         </View>
 
-        {/* 대목표 컴포넌트 - 오늘의 목표와 기간 목표 성공률 사이에 배치 */}
-        <BigGoalComponent />
-
-        {/* 기간 목표 성공률 헤더 + 퍼센티지 + 그래프 */}
+        {/* 기간 목표 성공률 */}
         <View style={styles.card}>
           <View style={styles.titleRow}>
             <Text style={styles.sectionTitle}>
@@ -458,7 +452,6 @@ const showAdOncePerDay = async () => {
             </View>
           </View>
 
-          {/* 퍼센티지 텍스트 */}
           <Text style={[styles.percentLabel, { color: getRateColor(currentStats.rate) }]}>
             {currentStats.rate}%
           </Text>
@@ -489,19 +482,18 @@ const showAdOncePerDay = async () => {
           </View>
         </View>
 
-       {/* 표준 배너 광고 (320x50) */}
-       <View style={styles.standardBannerContainer}>
-         <BannerAd
-           unitId={adUnitId}
-           size={BannerAdSize.ADAPTIVE_BANNER}
-           onAdFailedToLoad={(error) => {
-             console.log('광고 로드 실패:', error);
-             setAdError(true);
-           }}
-         />
-       </View>
+        {/* 배너 광고 */}
+        <View style={styles.standardBannerContainer}>
+          <BannerAd
+            unitId={adUnitId}
+            size={BannerAdSize.ADAPTIVE_BANNER}
+            onAdFailedToLoad={(error) => {
+              console.log('광고 로드 실패:', error);
+              setAdError(true);
+            }}
+          />
+        </View>
 
-        {/* 하단 여백을 최소화 - 더 이상 더 많은 페이딩 영역이 보이지 않도록 함 */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
@@ -553,7 +545,7 @@ const showAdOncePerDay = async () => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>목표 달성일</Text>
               <TouchableOpacity
-                style={styles.dateInput}
+                style={styles.dateInputButton}
                 onPress={() => setShowTargetDatePicker(true)}
               >
                 <Text style={newTargetDate ? styles.dateInputText : styles.dateInputPlaceholder}>
@@ -591,7 +583,7 @@ const showAdOncePerDay = async () => {
           isVisible={showTargetDatePicker}
           mode="date"
           date={newTargetDate ? new Date(newTargetDate) : new Date()}
-          minimumDate={new Date()} // 오늘 이후만 선택 가능
+          minimumDate={new Date()}
           onConfirm={handleTargetDateConfirm}
           onCancel={() => setShowTargetDatePicker(false)}
         />
@@ -607,11 +599,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    // paddingBottom은 제거하고 대신 bottomSpacing 컴포넌트를 사용
+    paddingBottom: 120,
   },
-  // 하단 여백 최적화 - 높이를 크게 줄임
   bottomSpacing: {
-    height: 20, // 100에서 20으로 크게 줄임으로써 빈 공간 최소화
+    height: 20,
   },
   card: {
     backgroundColor: '#1e293b',
@@ -652,103 +643,74 @@ const styles = StyleSheet.create({
   rangeButtonTextActive: { color: '#1e293b' },
   dateInput: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#1e293b',
-    color: 'white',
+    paddingVertical: 8,
+    backgroundColor: '#334155',
     borderRadius: 8,
-    fontSize: 16,
-  },
-  arrowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 4
-  },
-  arrow: {
     color: '#ffffff',
-    fontSize: 18,
-    paddingHorizontal: 10
-  },
-  arrowTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#cbd5e1'
+    fontSize: 14,
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 1
+    marginBottom: 8,
   },
   inlineSwitch: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    gap: 8,
   },
-  percentMessage: {
-    fontSize: 14,
-    color: '#cbd5e1',
-    marginTop: 4,
-    marginBottom: 4,
-    textAlign: 'left',
-    alignSelf: 'flex-start'
+  arrow: {
+    color: '#94a3b8',
+    fontSize: 18,
+    paddingHorizontal: 8,
   },
   tabLabel: {
-    fontSize: 16,
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#ffffff'
   },
   percentLabel: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#ffffff',
-    textAlign: 'left',
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    marginBottom: 8
+    fontSize: 48,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 8,
   },
-
-// 표준 배너 광고 컨테이너 (320x50)
-standardBannerContainer: {
-  width: '100%',
-  height: 60, // 50에서 60으로 변경 (ADAPTIVE_BANNER는 더 높을 수 있음)
-  backgroundColor: '#ffffff',
-  borderRadius: 8,
-  overflow: 'hidden',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginBottom: 30,
-},
-
-  // 대목표 카드 - 비어있을 때
+  percentMessage: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  standardBannerContainer: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  // 대목표 스타일
   bigGoalEmptyCard: {
     backgroundColor: '#1e293b',
+    padding: 20,
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
     borderStyle: 'dashed',
   },
   bigGoalEmptyText: {
     color: '#8b5cf6',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 8,
   },
   bigGoalEmptySubtext: {
     color: '#94a3b8',
-    fontSize: 14,
-    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 4,
   },
-
-  // 대목표 카드 - 있을 때
   bigGoalCard: {
     backgroundColor: '#1e293b',
-    borderRadius: 12,
     padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
   },
   bigGoalHeader: {
@@ -778,14 +740,14 @@ standardBannerContainer: {
     fontWeight: 'bold',
   },
   bigGoalDeleteButton: {
-    backgroundColor: '#ef4444', // 빨간색 배경
+    backgroundColor: '#ef4444',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 4,
     marginLeft: 8,
   },
   bigGoalDeleteText: {
-    color: '#ffffff', // 흰색 텍스트
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -848,24 +810,23 @@ standardBannerContainer: {
     fontWeight: 'bold',
   },
   bigGoalMotivationText: {
-    color: '#8b5cf6',
+    color: '#94a3b8',
     fontSize: 14,
     textAlign: 'center',
     marginTop: 16,
     fontStyle: 'italic',
   },
-
   // 모달 스타일
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     width: '90%',
     maxWidth: 400,
   },
@@ -873,24 +834,28 @@ standardBannerContainer: {
     color: '#ffffff',
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
+    marginBottom: 20,
   },
   inputGroup: {
     marginBottom: 16,
   },
   inputLabel: {
-    color: '#cbd5e1',
+    color: '#94a3b8',
     fontSize: 14,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   modalInput: {
     backgroundColor: '#334155',
-    color: '#ffffff',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 12,
+    color: '#ffffff',
     fontSize: 16,
+  },
+  dateInputButton: {
+    backgroundColor: '#334155',
+    borderRadius: 8,
+    padding: 12,
   },
   dateInputText: {
     color: '#ffffff',
@@ -904,47 +869,45 @@ standardBannerContainer: {
     backgroundColor: '#334155',
     borderRadius: 8,
     padding: 12,
-    marginVertical: 16,
+    marginBottom: 20,
   },
   modalTipTitle: {
-    color: '#ffffff',
+    color: '#8b5cf6',
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   modalTipText: {
     color: '#94a3b8',
-    fontSize: 14,
+    fontSize: 12,
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
   },
   modalCancel: {
     flex: 1,
     backgroundColor: '#334155',
-    paddingVertical: 12,
     borderRadius: 8,
+    padding: 12,
     marginRight: 8,
     alignItems: 'center',
   },
   modalCancelText: {
-    color: '#94a3b8',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
   },
   modalConfirm: {
     flex: 1,
     backgroundColor: '#8b5cf6',
-    paddingVertical: 12,
     borderRadius: 8,
+    padding: 12,
     marginLeft: 8,
     alignItems: 'center',
   },
   modalConfirmDisabled: {
-    backgroundColor: '#4c1d95',
-    opacity: 0.5,
+    backgroundColor: '#475569',
   },
   modalConfirmText: {
     color: '#ffffff',
